@@ -1,0 +1,37 @@
+[
+  {
+    "query": "deep learning",
+    "response": "I found several papers on deep learning. One notable paper is 'Deep Learning' by Yann LeCun, Yoshua Bengio, and Geoffrey Hinton published in Nature (2015).",
+    "citation": "LeCun, Y., Bengio, Y., & Hinton, G. (2015). Deep learning. Nature, 521(7553), 436-444."
+  },
+  {
+    "query": "transformers",
+    "response": "A groundbreaking paper on transformers is 'Attention Is All You Need' by Vaswani et al., which introduced the transformer architecture now widely used in NLP.",
+    "citation": "Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., & Polosukhin, I. (2017). Attention is all you need. In Proceedings of the 31st International Conference on Neural Information Processing Systems."
+  },
+  {
+    "query": "machine learning",
+    "response": "There are many influential papers on machine learning. One foundational paper is 'A Few Useful Things to Know About Machine Learning' by Pedro Domingos.",
+    "citation": "Domingos, P. (2012). A few useful things to know about machine learning. Communications of the ACM, 55(10), 78-87."
+  },
+  {
+    "query": "neural networks",
+    "response": "Neural networks are widely used in AI. 'ImageNet Classification with Deep Convolutional Neural Networks' by Krizhevsky et al. was a breakthrough paper for CNNs.",
+    "citation": "Krizhevsky, A., Sutskever, I., & Hinton, G. E. (2012). ImageNet classification with deep convolutional neural networks. Advances in neural information processing systems, 25."
+  },
+  {
+    "query": "natural language processing",
+    "response": "Natural Language Processing has seen tremendous advances. 'BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding' by Devlin et al. introduced a pivotal model.",
+    "citation": "Devlin, J., Chang, M. W., Lee, K., & Toutanova, K. (2018). BERT: Pre-training of deep bidirectional transformers for language understanding. arXiv preprint arXiv:1810.04805."
+  },
+  {
+    "query": "reinforcement learning",
+    "response": "Reinforcement learning has made significant strides. A landmark paper is 'Human-level control through deep reinforcement learning' by Mnih et al., published in Nature.",
+    "citation": "Mnih, V., Kavukcuoglu, K., Silver, D., Rusu, A. A., Veness, J., Bellemare, M. G., ... & Hassabis, D. (2015). Human-level control through deep reinforcement learning. Nature, 518(7540), 529-533."
+  },
+  {
+    "query": "computer vision",
+    "response": "Computer vision has been revolutionized by CNNs. The paper 'Very Deep Convolutional Networks for Large-Scale Image Recognition' by Simonyan and Zisserman introduced the influential VGG architecture.",
+    "citation": "Simonyan, K., & Zisserman, A. (2014). Very deep convolutional networks for large-scale image recognition. arXiv preprint arXiv:1409.1556."
+  }
+] 

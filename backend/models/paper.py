@@ -1,11 +1,12 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-class PaperData(BaseModel):
+class Paper(BaseModel):
     """
-    Legacy model for paper data, used for compatibility with older methods.
-    Combines aspects of Paper model with response data.
+    Model for a research paper with detailed metadata.
+    Used in search results and paper management.
     """
+    id: Optional[str] = None
     title: str
     authors: List[str]
     abstract: str
@@ -16,7 +17,4 @@ class PaperData(BaseModel):
     pdf_url: Optional[str] = None
     publication_date: Optional[str] = None
     citations: Optional[int] = None
-    keywords: Optional[List[str]] = None
-    response: Optional[str] = None
-    citation: Optional[str] = None
-    query: Optional[str] = None  # Added for backward compatibility 
+    keywords: Optional[List[str]] = None 

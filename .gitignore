@@ -23,3 +23,10 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Environment variables
+.env
+
+# Data files
+# Ignore paper_data.json in all directories
+**/paper_data.json

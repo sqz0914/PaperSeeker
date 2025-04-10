@@ -15,7 +15,25 @@ const ChatInterface = () => {
   const [isLoadingTopics, setIsLoadingTopics] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
   const [welcomeMessageComplete, setWelcomeMessageComplete] = useState(false);
+  const [usingRealData, setUsingRealData] = useState(false);
   const messagesEndRef = useRef(null);
+
+  // Fetch data source info when component mounts
+  useEffect(() => {
+    const fetchDataSourceInfo = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/data-source`);
+        if (response.ok) {
+          const data = await response.json();
+          setUsingRealData(data.using_real_data);
+        }
+      } catch (err) {
+        console.error('Error fetching data source info:', err);
+      }
+    };
+
+    fetchDataSourceInfo();
+  }, []);
 
   // Fetch available topics when component mounts
   useEffect(() => {
@@ -270,8 +288,17 @@ const ChatInterface = () => {
   return (
     <div className="flex flex-col h-[80vh] max-w-2xl mx-auto border rounded-lg shadow-md overflow-hidden">
       <div className="bg-blue-600 text-white p-4">
-        <h1 className="text-xl font-bold">PaperSeeker</h1>
-        <p className="text-sm">Your research paper assistant</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-bold">PaperSeeker</h1>
+            <p className="text-sm">Your research paper assistant</p>
+          </div>
+          {usingRealData && (
+            <span className="bg-green-500 text-white text-xs font-medium px-2 py-1 rounded">
+              Using Real Data
+            </span>
+          )}
+        </div>
       </div>
       
       <div className="flex-grow p-4 overflow-y-auto bg-white dark:bg-gray-900">
@@ -316,7 +343,7 @@ const ChatInterface = () => {
           <p className="text-xs text-gray-500 mb-2">
             Try asking about:
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 max-h-20 overflow-y-auto">
             {isLoadingTopics ? (
               <span className="text-xs text-gray-400">Loading topics...</span>
             ) : (
@@ -333,6 +360,16 @@ const ChatInterface = () => {
             )}
           </div>
         </div>
+        
+        {usingRealData && (
+          <div className="mt-3 text-xs text-gray-500">
+            <p>
+              PaperSeeker is connected to a real academic paper database. 
+              You can ask questions like "What are recent advances in COVID vaccines?" or 
+              "Find papers about climate change mitigation strategies."
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

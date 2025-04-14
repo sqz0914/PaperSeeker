@@ -10,7 +10,6 @@ const ChatInterface = () => {
   const [messages, setMessages] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [streamingMessage, setStreamingMessage] = useState(null);
   const [availableTopics, setAvailableTopics] = useState([]);
   const [isLoadingTopics, setIsLoadingTopics] = useState(true);
   const [isInitializing, setIsInitializing] = useState(true);
@@ -22,10 +21,10 @@ const ChatInterface = () => {
   useEffect(() => {
     const fetchDataSourceInfo = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/data-source`);
+        const response = await fetch(`${API_URL}/`);
         if (response.ok) {
           const data = await response.json();
-          setUsingRealData(data.using_real_data);
+          setUsingRealData(data.papers_loaded > 0);
         }
       } catch (err) {
         console.error('Error fetching data source info:', err);
@@ -41,8 +40,8 @@ const ChatInterface = () => {
       try {
         const response = await fetch(`${API_URL}/api/topics`);
         if (response.ok) {
-          const topics = await response.json();
-          setAvailableTopics(topics);
+          const data = await response.json();
+          setAvailableTopics(data.topics || []);
         } else {
           console.error('Failed to fetch topics');
         }
@@ -62,15 +61,16 @@ const ChatInterface = () => {
       setIsInitializing(true);
       
       try {
-        // Create streaming message container for welcome message
-        const initialStreamingMessage = {
+        // Add welcome message directly to messages array with streaming flag
+        const welcomeMessage = {
           id: 1,
           text: '',
           sender: 'bot',
-          citation: null
+          citation: null,
+          isStreaming: true // Flag to identify this as streaming
         };
         
-        setStreamingMessage(initialStreamingMessage);
+        setMessages([welcomeMessage]);
         
         const response = await fetch(`${API_URL}/api/welcome`);
         
@@ -106,23 +106,33 @@ const ChatInterface = () => {
                   break;
                   
                 case 'chunk':
-                  // Add new content to the message
+                  // Add new content to the message and update in the array
                   currentText += data.content;
-                  setStreamingMessage(prev => ({
-                    ...prev,
-                    text: currentText
-                  }));
+                  setMessages(prevMessages => {
+                    const updatedMessages = [...prevMessages];
+                    if (updatedMessages.length > 0) {
+                      updatedMessages[0] = {
+                        ...updatedMessages[0],
+                        text: currentText
+                      };
+                    }
+                    return updatedMessages;
+                  });
                   break;
                   
                 case 'end':
-                  // Message complete, finalize
-                  const finalMessage = {
-                    id: 1,
-                    text: currentText,
-                    sender: 'bot'
-                  };
-                  setMessages([finalMessage]);
-                  setStreamingMessage(null);
+                  // When streaming is complete, simply update the message without the streaming flag
+                  setMessages(prevMessages => {
+                    const updatedMessages = [...prevMessages];
+                    if (updatedMessages.length > 0) {
+                      updatedMessages[0] = {
+                        ...updatedMessages[0],
+                        text: currentText,
+                        isStreaming: false // Remove streaming flag
+                      };
+                    }
+                    return updatedMessages;
+                  });
                   setWelcomeMessageComplete(true);
                   break;
               }
@@ -138,9 +148,9 @@ const ChatInterface = () => {
         setMessages([{
           id: 1,
           text: "Hello! I'm PaperSeeker. Ask me about research papers, and I'll help you find relevant information.",
-          sender: 'bot'
+          sender: 'bot',
+          isStreaming: false
         }]);
-        setStreamingMessage(null);
         setWelcomeMessageComplete(true);
       } finally {
         setIsInitializing(false);
@@ -156,7 +166,7 @@ const ChatInterface = () => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingMessage]);
+  }, [messages]); // Remove streamingMessage dependency since we don't use it anymore
 
   const handleSendMessage = async (text) => {
     // Don't process if initialization isn't complete
@@ -171,21 +181,20 @@ const ChatInterface = () => {
       sender: 'user'
     };
     
-    setMessages(prev => [...prev, newUserMessage]);
+    // Add bot message as streaming initially
+    const botMessage = {
+      id: messages.length + 2,
+      text: '',
+      sender: 'bot',
+      citation: null,
+      isStreaming: true
+    };
+    
+    setMessages(prev => [...prev, newUserMessage, botMessage]);
     setIsLoading(true);
     setError(null);
     
     try {
-      // Create streaming message container
-      const initialStreamingMessage = {
-        id: messages.length + 2,
-        text: '',
-        sender: 'bot',
-        citation: null
-      };
-      
-      setStreamingMessage(initialStreamingMessage);
-      
       // Fetch from streaming endpoint
       const response = await fetch(`${API_URL}/api/stream`, {
         method: 'POST',
@@ -206,6 +215,7 @@ const ChatInterface = () => {
       let done = false;
       let currentText = '';
       let citation = null;
+      const botMessageIndex = messages.length + 1; // Index of the bot message we just added
       
       while (!done) {
         const { value, done: doneReading } = await reader.read();
@@ -231,31 +241,49 @@ const ChatInterface = () => {
               case 'chunk':
                 // Add new content to the message
                 currentText += data.content;
-                setStreamingMessage(prev => ({
-                  ...prev,
-                  text: currentText
-                }));
+                // Update the message in the messages array
+                setMessages(prevMessages => {
+                  const updatedMessages = [...prevMessages];
+                  if (updatedMessages.length > botMessageIndex) {
+                    updatedMessages[botMessageIndex] = {
+                      ...updatedMessages[botMessageIndex],
+                      text: currentText
+                    };
+                  }
+                  return updatedMessages;
+                });
                 break;
                 
               case 'citation':
                 // Add citation
                 citation = data.content;
-                setStreamingMessage(prev => ({
-                  ...prev,
-                  citation
-                }));
+                // Update the message in the messages array
+                setMessages(prevMessages => {
+                  const updatedMessages = [...prevMessages];
+                  if (updatedMessages.length > botMessageIndex) {
+                    updatedMessages[botMessageIndex] = {
+                      ...updatedMessages[botMessageIndex],
+                      citation
+                    };
+                  }
+                  return updatedMessages;
+                });
                 break;
                 
               case 'end':
-                // Message complete, finalize
-                const finalMessage = {
-                  id: messages.length + 2,
-                  text: currentText,
-                  sender: 'bot',
-                  citation
-                };
-                setMessages(prev => [...prev, finalMessage]);
-                setStreamingMessage(null);
+                // When streaming is complete, update the message and mark as not streaming
+                setMessages(prevMessages => {
+                  const updatedMessages = [...prevMessages];
+                  if (updatedMessages.length > botMessageIndex) {
+                    updatedMessages[botMessageIndex] = {
+                      ...updatedMessages[botMessageIndex],
+                      text: currentText,
+                      citation,
+                      isStreaming: false
+                    };
+                  }
+                  return updatedMessages;
+                });
                 break;
             }
           } catch (e) {
@@ -267,15 +295,19 @@ const ChatInterface = () => {
       console.error('Error fetching from API:', err);
       setError(err.message);
       
-      // Add error message
-      const errorMessage = {
-        id: messages.length + 2,
-        text: "Sorry, I'm having trouble connecting to the research database. Please try again later.",
-        sender: 'bot',
-      };
-      
-      setMessages(prev => [...prev, errorMessage]);
-      setStreamingMessage(null);
+      // Update the bot message to show an error
+      setMessages(prevMessages => {
+        const updatedMessages = [...prevMessages];
+        const botMessageIndex = updatedMessages.length - 1;
+        if (botMessageIndex >= 0) {
+          updatedMessages[botMessageIndex] = {
+            ...updatedMessages[botMessageIndex],
+            text: "Sorry, I'm having trouble connecting to the research database. Please try again later.",
+            isStreaming: false
+          };
+        }
+        return updatedMessages;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -303,15 +335,10 @@ const ChatInterface = () => {
       
       <div className="flex-grow p-4 overflow-y-auto bg-white dark:bg-gray-900">
         {messages.map(message => (
-          <ChatMessage key={message.id} message={message} isStreaming={false} />
+          <ChatMessage key={message.id} message={message} isStreaming={message.isStreaming || false} />
         ))}
         
-        {/* Streaming message */}
-        {streamingMessage && (
-          <ChatMessage message={streamingMessage} isStreaming={true} />
-        )}
-        
-        {isLoading && !streamingMessage && (
+        {isLoading && messages.length === 0 && (
           <div className="flex justify-start mb-4">
             <div className="bg-gray-200 dark:bg-gray-800 p-3 rounded-lg flex items-center space-x-2">
               <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>

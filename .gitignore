@@ -30,3 +30,7 @@ __pycache__/
 # Data files
 # Ignore paper_data.json in all directories
 **/paper_data.json
+
+# Milvus Lite data
+**/milvus_data.db
+

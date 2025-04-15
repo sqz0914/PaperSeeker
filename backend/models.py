@@ -7,6 +7,9 @@ class ExternalId(BaseModel):
     source: str
     id: str
 
+    def __str__(self):
+        return f"{self.source}: {self.id}"
+
 class PaperMetadata(BaseModel):
     """Model for paper metadata"""
     year: Optional[int] = None
@@ -38,7 +41,6 @@ class Paper(BaseModel):
     year: Optional[str] = None
     url: Optional[str] = None
     topic: Optional[str] = Field(None, description="Research topic or category")
-    pdf_url: Optional[str] = None
     publication_date: Optional[str] = None
     citations: Optional[int] = None
     keywords: Optional[List[str]] = None

@@ -1,107 +1,121 @@
-# PaperSeeker Backend API
+# PaperSeeker Backend
 
-A simple API for searching and retrieving academic papers using FastAPI.
+A FastAPI backend for semantically searching academic papers using Zilliz Cloud and Ollama.
 
-## Setup and Installation
+## Overview
 
-1. Ensure you have Python 3.7+ installed
-2. Install required packages:
-   ```
-   pip install fastapi uvicorn
-   ```
-3. Run the API server:
-   ```
-   python app.py
-   ```
-   
-The server will start at `http://localhost:8000`
+PaperSeeker uses vector search powered by Zilliz Cloud to find papers semantically similar to your query. The system:
 
-## API Documentation
+1. Generates embeddings for papers using Ollama (with Llama 3.2)
+2. Stores these embeddings in Zilliz Cloud for efficient similarity search
+3. Provides a FastAPI interface for searching and retrieving papers
 
-Once the server is running, visit `http://localhost:8000/docs` for the interactive API documentation.
+## Setup
 
-### Available Endpoints
+### Requirements
 
-#### General Endpoints
+Install the required packages:
 
-- `GET /`: Basic information about the API
-- `GET /papers`: Get all available papers
-- `GET /papers/{paper_id}`: Get a specific paper by ID, parsed using the Paper model
-- `POST /search`: Search for papers matching a query term
-
-#### Frontend Support Endpoints
-
-- `GET /api/topics`: Get all available paper topics/fields of study
-- `POST /api/search`: Simple search API returning formatted responses for the chat interface
-- `POST /api/stream`: Streaming search API with typing effect for interactive UI
-- `GET /api/welcome`: Stream the welcome message
-
-### Models
-
-#### Paper Model
-
-The API uses a detailed `Paper` model from `paper.py` that can parse raw paper data into structured objects, including:
-
-- Basic metadata (id, title, authors, abstract, year)
-- Source information
-- External identifiers
-- Fields of study
-- Publication details
-
-## Example Usage
-
-### Search for Papers
-
-```http
-POST /search
-Content-Type: application/json
-
-{
-  "query": "vaccine"
-}
+```bash
+pip install -r requirements.txt
 ```
 
-Response:
+Make sure you have [Ollama](https://ollama.ai/) installed and running with the Llama 3.2 model:
+
+```bash
+ollama pull llama3
+```
+
+### Zilliz Cloud Setup
+
+1. Create a Zilliz Cloud account at [cloud.zilliz.com](https://cloud.zilliz.com/) if you don't have one
+2. Create a new cluster (or use an existing one)
+3. Copy the `.env.template` file to `.env`:
+   ```bash
+   cp .env.template .env
+   ```
+4. Update the `.env` file with your Zilliz Cloud cluster information:
+   - `ZILLIZ_CLOUD_URI`: The URI of your Zilliz Cloud cluster (e.g., https://cluster-name.zillizcloud.com:19530)
+   - `ZILLIZ_CLOUD_TOKEN`: Your Zilliz Cloud API key
+
+### Data Preparation
+
+Place your paper data in JSONL format (one JSON paper per line) in the `sample_papers.json` file. Each paper should follow this format:
+
 ```json
 {
-  "papers": [
-    {
-      "id": "25228287",
-      "source": "pes2o/s2ag",
-      "version": "v3-fos-license",
-      "text": "A fully synthetic four-component antitumor vaccine...",
-      "metadata": {
-        "title": "A fully synthetic four-component antitumor vaccine...",
-        "abstract": "In a new concept of fully synthetic vaccines...",
-        "year": 2014,
-        ...
-      }
-    }
-  ]
+  "id": "unique_id",
+  "source": "paper_source",
+  "version": "version_info",
+  "added": "timestamp",
+  "created": "timestamp",
+  "text": "full_paper_text",
+  "metadata": {
+    "year": 2023,
+    "title": "Paper Title",
+    "abstract": "Paper abstract text...",
+    "sha1": "hash_value",
+    "sources": ["source1", "source2"],
+    "s2fieldsofstudy": ["field1", "field2"],
+    "extfieldsofstudy": ["field3"],
+    "external_ids": [
+      {"source": "DOI", "id": "10.xxxx/yyyy"},
+      {"source": "MAG", "id": "12345678"}
+    ]
+  }
 }
 ```
 
-### Get a Specific Paper
+### Generate Embeddings
 
-```http
-GET /papers/25228287
+Run the embedding generation script to process papers and create the vector database in Zilliz Cloud:
+
+```bash
+python generate_embeddings.py
 ```
 
-Response:
-```json
-{
-  "id": "25228287",
-  "title": "A fully synthetic four-component antitumor vaccine...",
-  "abstract": "In a new concept of fully synthetic vaccines...",
-  "year": "2014",
-  "topic": "Medicine",
-  ...
-}
+This script:
+- Processes the papers in batches to handle large files
+- Generates embeddings using Ollama
+- Stores papers and embeddings in Zilliz Cloud
+
+## Running the API
+
+Start the FastAPI server:
+
+```bash
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+## API Endpoints
+
+- `GET /`: API information
+- `POST /search`: Search for papers using a query
+- `GET /papers`: Get all papers (paginated)
+- `GET /papers/{paper_id}`: Get a specific paper by ID
+- `GET /api/topics`: Get all available research topics
+- `POST /api/search`: Simple search API for chat interface
+- `POST /api/stream`: Stream search results with typing effect
+- `GET /api/welcome`: Welcome message for chat interface
 
 ## Implementation Details
 
-- Basic text-based search over titles, abstracts, and full paper text
-- Structured paper models using Pydantic
-- Streaming responses for interactive chat interface
-- CORS support for frontend integration 
+### Zilliz Cloud
+
+This implementation uses Zilliz Cloud, a fully managed vector database service based on Milvus, which:
+- Requires no infrastructure management
+- Provides high availability and scalability
+- Offers excellent performance for vector similarity search
+- Has a simple API for integrating into applications
+
+### Batch Processing
+
+Large paper collections are processed in batches to manage memory usage efficiently.
+
+### Embedding Generation
+
+Each paper's text is weighted (title appears multiple times) to improve search relevance, then processed with Llama 3.2 through Ollama API.
+
+### Search Fallback
+
+If vector search fails, the system falls back to text-based search for reliability. 

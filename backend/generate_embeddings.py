@@ -104,41 +104,41 @@ def generate_embedding(text: str) -> List[float]:
         logger.error(f"Error generating embedding: {e}")
         return []
 
-def prepare_paper_embedding_content(paper: Paper) -> str:
-    """
-    Create a structured text representation of a paper for embedding.
+# def prepare_paper_embedding_content(paper: Paper) -> str:
+#     """
+#     Create a structured text representation of a paper for embedding.
     
-    Args:
-        paper: Paper object
+#     Args:
+#         paper: Paper object
         
-    Returns:
-        Formatted text optimized for embedding generation
-    """
-    # Create a structured text with clear sections
-    sections = []
+#     Returns:
+#         Formatted text optimized for embedding generation
+#     """
+#     # Create a structured text with clear sections
+#     sections = []
     
-    # Title is most important - repeat and emphasize
-    sections.append(f"TITLE: {paper.title}")
+#     # Title is most important - repeat and emphasize
+#     sections.append(f"TITLE: {paper.title}")
     
-    # Abstract provides a good summary
-    if paper.abstract:
-        sections.append(f"ABSTRACT: {paper.abstract}")
+#     # Abstract provides a good summary
+#     if paper.abstract:
+#         sections.append(f"ABSTRACT: {paper.abstract}")
     
-    # Add year if available
-    if paper.year:
-        sections.append(f"YEAR: {paper.year}")
+#     # Add year if available
+#     if paper.year:
+#         sections.append(f"YEAR: {paper.year}")
     
-    # Add authors if available
-    if hasattr(paper, 'authors') and paper.authors:
-        author_text = ", ".join(paper.authors) if isinstance(paper.authors, list) else str(paper.authors)
-        sections.append(f"AUTHORS: {author_text}")
+#     # Add authors if available
+#     if hasattr(paper, 'authors') and paper.authors:
+#         author_text = ", ".join(paper.authors) if isinstance(paper.authors, list) else str(paper.authors)
+#         sections.append(f"AUTHORS: {author_text}")
     
-    # Add main text if available - this will be truncated by the tokenizer
-    if paper.text:
-        sections.append(f"CONTENT: {paper.text}")
+#     # Add main text if available - this will be truncated by the tokenizer
+#     if paper.text:
+#         sections.append(f"CONTENT: {paper.text}")
     
-    # Join with newlines to create clear section separation
-    return "\n\n".join(sections)
+#     # Join with newlines to create clear section separation
+#     return "\n\n".join(sections)
 
 def generate_chunked_embeddings(paper: Paper) -> Tuple[List[float], List[str]]:
     """
@@ -151,7 +151,7 @@ def generate_chunked_embeddings(paper: Paper) -> Tuple[List[float], List[str]]:
         Tuple of (final embedding vector, list of chunks used)
     """
     # Prepare the formatted text content
-    paper_text = prepare_paper_embedding_content(paper)
+    paper_text = prepare_paper_embedding_content(paper.prepare_paper_embedding_content())
     
     # Initialize LangChain's RecursiveCharacterTextSplitter
     text_splitter = RecursiveCharacterTextSplitter(
@@ -437,7 +437,7 @@ def process_papers_stream(file_path: str, limit: Optional[int] = None):
 def main():
     """Main function that processes papers one by one."""
     # Path to sample papers
-    papers_path = os.path.join(os.path.dirname(__file__), "sample_papers.json")
+    papers_path = os.path.join(os.path.dirname(__file__), "paper_data.json")
     
     # Process papers one by one
     process_papers_stream(papers_path, limit=None)

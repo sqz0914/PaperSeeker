@@ -292,7 +292,7 @@ def api_search_papers(request: QueryRequest):
     if vector_search:
         try:
             # Try vector search first
-            matched_papers = vector_search.search(query, limit=1)
+            matched_papers = vector_search.search(query, limit=100)
             if matched_papers:
                 paper = matched_papers[0]
                 title = paper.get("metadata", {}).get("title", "")

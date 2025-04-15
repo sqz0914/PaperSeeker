@@ -121,7 +121,43 @@ class Paper(BaseModel):
                         paper.url = f"https://doi.org/{ext_id['id']}"
                         break
         
-        return paper 
+        return paper
+    
+    def prepare_paper_embedding_content(self) -> str:
+        """
+        Create a structured text representation of a paper for embedding.
+        
+        Args:
+            paper: Paper object
+            
+        Returns:
+            Formatted text optimized for embedding generation
+        """
+        # Create a structured text with clear sections
+        sections = []
+        
+        # Title is most important - repeat and emphasize
+        sections.append(f"TITLE: {self.title}")
+        
+        # Abstract provides a good summary
+        if self.abstract:
+            sections.append(f"ABSTRACT: {self.abstract}")
+        
+        # Add year if available
+        if self.year:
+            sections.append(f"YEAR: {self.year}")
+        
+        # Add authors if available
+        if hasattr(self, 'authors') and self.authors:
+            author_text = ", ".join(self.authors) if isinstance(self.authors, list) else str(self.authors)
+            sections.append(f"AUTHORS: {author_text}")
+        
+        # Add main text if available - this will be truncated by the tokenizer
+        if self.text:
+            sections.append(f"CONTENT: {self.text}")
+        
+        # Join with newlines to create clear section separation
+        return "\n\n".join(sections)
 
 # Define request and response models
 class SearchRequest(BaseModel):

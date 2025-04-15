@@ -10,6 +10,8 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel
 from models import Paper, SearchRequest, QueryRequest
 from vector_search import VectorSearch
+from llm_processor import LLMProcessor
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,9 +38,12 @@ WELCOME_MESSAGE = "Hello! I'm PaperSeeker. Ask me about research papers using ve
 
 # Initialize vector search
 vector_search = None
+llm_processor = None
 try:
     vector_search = VectorSearch()
     logger.info("Vector search engine initialized successfully")
+    llm_processor = LLMProcessor()
+    logger.info("LLM processor initialized successfully")
 except ValueError as e:
     if "Collection 'paper_collection' not found" in str(e):
         logger.warning("Zilliz Cloud collection not found. Please run generate_embeddings.py first to create the vector database.")
@@ -118,13 +123,44 @@ async def search(request: SearchRequest):
     """
     query = request.query
     top_k = request.top_k if hasattr(request, 'top_k') else 5
+    use_llm = request.use_llm if hasattr(request, 'use_llm') else False
     
     # Use vector search if available
     if vector_search:
         try:
-            matched_papers = vector_search.search(query, limit=top_k)
+            # Get more results if we're using LLM reranking
+            limit = 20 if use_llm and llm_processor else top_k
+            
+            matched_papers = vector_search.search(query, limit=limit)
             logger.info(f"Vector search found {len(matched_papers)} papers matching query: '{query}'")
-            return {"papers": matched_papers}
+            
+            # If LLM reranking is requested and available
+            if use_llm and llm_processor and matched_papers:
+                try:
+                    logger.info("Starting LLM reranking and response generation")
+                    llm_response = llm_processor.rerank_and_generate(
+                        query=query,
+                        papers=matched_papers,
+                        max_papers_for_rerank=limit,
+                        max_papers_for_response=top_k
+                    )
+                    
+                    # Parse the LLM response to extract paper sections
+                    # Find sections divided by "---"
+                    paper_sections = re.split(r'\n---\n', llm_response)
+                    
+                    # Return both the raw response and structured data
+                    return {
+                        "papers": matched_papers[:top_k],
+                        "llm_response": llm_response,
+                        "paper_sections": paper_sections
+                    }
+                except Exception as e:
+                    logger.error(f"LLM reranking failed: {e}")
+                    # Fall back to standard results
+                    return {"papers": matched_papers[:top_k]}
+            else:
+                return {"papers": matched_papers[:top_k]}
         except Exception as e:
             logger.error(f"Vector search failed: {e}")
             logger.info("Falling back to text-based search")
@@ -219,34 +255,52 @@ async def stream_text(text: str, citation: str = None):
 # Stream the response for a query
 async def stream_response(query: str):
     """Stream a response character by character with realistic typing delays"""
-    if vector_search:
+    if vector_search and llm_processor:
         try:
-            # Try to use vector search first
-            matched_papers = vector_search.search(query, limit=1)
+            # Try to use vector search with LLM processing
+            matched_papers = vector_search.search(query, limit=20)
             if matched_papers:
-                paper = matched_papers[0]
-                title = paper.get("metadata", {}).get("title", "")
-                abstract = paper.get("metadata", {}).get("abstract", "")
-                year = paper.get("metadata", {}).get("year", "")
-                score = paper.get("similarity_score", 0)
-                
-                # Get citation from external IDs
-                citation = None
-                if paper.get("metadata", {}).get("external_ids"):
-                    ext_ids = []
-                    for ext_id in paper["metadata"]["external_ids"]:
-                        if ext_id.get("source") and ext_id.get("id"):
-                            ext_ids.append(f"{ext_id['source']}: {ext_id['id']}")
+                try:
+                    logger.info("Generating LLM response for streaming")
+                    llm_response = await llm_processor.rerank_and_generate_async(
+                        query=query,
+                        papers=matched_papers,
+                        max_papers_for_rerank=20,
+                        max_papers_for_response=5
+                    )
                     
-                    if ext_ids:
-                        citation = ", ".join(ext_ids)
-                
-                # Generate a more informative response using the paper data
-                response = f"I found a paper that might be relevant (similarity score: {score:.2f}): '{title}' ({year}). {abstract[:300]}..."
-                
-                async for chunk in stream_text(response, citation):
-                    yield chunk
-                return
+                    # Stream the LLM-generated response
+                    async for chunk in stream_text(llm_response):
+                        yield chunk
+                    return
+                except Exception as e:
+                    logger.error(f"LLM response generation failed: {e}")
+                    # Fall back to simple response
+            
+            # LLM failed or not available, fall back to simple response
+            paper = matched_papers[0]
+            title = paper.get("metadata", {}).get("title", "")
+            abstract = paper.get("metadata", {}).get("abstract", "")
+            year = paper.get("metadata", {}).get("year", "")
+            score = paper.get("similarity_score", 0)
+            
+            # Get citation from external IDs
+            citation = None
+            if paper.get("metadata", {}).get("external_ids"):
+                ext_ids = []
+                for ext_id in paper["metadata"]["external_ids"]:
+                    if ext_id.get("source") and ext_id.get("id"):
+                        ext_ids.append(f"{ext_id['source']}: {ext_id['id']}")
+            
+            if ext_ids:
+                citation = ", ".join(ext_ids)
+            
+            # Generate a more informative response using the paper data
+            response = f"I found a paper that might be relevant (similarity score: {score:.2f}): '{title}' ({year}). {abstract[:300]}..."
+            
+            async for chunk in stream_text(response, citation):
+                yield chunk
+            return
         except Exception as e:
             logger.error(f"Vector search failed in streaming: {e}")
             # Fall back to text search
@@ -265,9 +319,9 @@ async def stream_response(query: str):
                 for ext_id in paper["metadata"]["external_ids"]:
                     if ext_id.get("source") and ext_id.get("id"):
                         ext_ids.append(f"{ext_id['source']}: {ext_id['id']}")
-                
-                if ext_ids:
-                    citation = ", ".join(ext_ids)
+            
+            if ext_ids:
+                citation = ", ".join(ext_ids)
             
             title = paper.get("metadata", {}).get("title", "")
             abstract = paper.get("metadata", {}).get("abstract", "")
@@ -288,11 +342,39 @@ async def stream_response(query: str):
 def api_search_papers(request: QueryRequest):
     """Simple search API for the chat interface"""
     query = request.query
+    use_llm = request.use_llm if hasattr(request, 'use_llm') else True
     
     if vector_search:
         try:
             # Try vector search first
-            matched_papers = vector_search.search(query, limit=100)
+            matched_papers = vector_search.search(query, limit=20)
+            
+            # If LLM is available and requested, use it for response generation
+            if use_llm and llm_processor and matched_papers:
+                try:
+                    llm_response = llm_processor.rerank_and_generate(
+                        query=query,
+                        papers=matched_papers,
+                        max_papers_for_rerank=20,
+                        max_papers_for_response=5
+                    )
+                    
+                    # Extract citation from the response
+                    citation = None
+                    if "Source:" in llm_response:
+                        # Find the first source line
+                        match = re.search(r'Source:\s*(.+?)($|\n)', llm_response)
+                        if match:
+                            citation = match.group(1).strip()
+                    
+                    return {
+                        "response": llm_response,
+                        "citation": citation
+                    }
+                except Exception as e:
+                    logger.error(f"LLM response generation failed: {e}")
+                    # Fall back to standard response
+            
             if matched_papers:
                 paper = matched_papers[0]
                 title = paper.get("metadata", {}).get("title", "")

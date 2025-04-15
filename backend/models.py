@@ -161,10 +161,19 @@ class Paper(BaseModel):
 
 # Define request and response models
 class SearchRequest(BaseModel):
+    """
+    Schema for search requests
+    """
     query: str
+    top_k: Optional[int] = 5
+    use_llm: Optional[bool] = False
 
 class SearchResponse(BaseModel):
     papers: List[Dict[str, Any]]
 
 class QueryRequest(BaseModel):
+    """
+    Schema for chat query requests
+    """
     query: str
+    use_llm: Optional[bool] = True

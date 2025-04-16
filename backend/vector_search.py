@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from models import Paper
 from rank_bm25 import BM25Okapi
-from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 
 # Load environment variables
@@ -82,6 +81,7 @@ class VectorSearch:
         # Initialize stopwords if NLTK is available, otherwise use a basic list
         if nltk_available:
             self.stop_words = set(stopwords.words('english'))
+            print(self.stop_words)
         else:
             # Basic English stopwords as fallback
             self.stop_words = {'a', 'an', 'the', 'and', 'or', 'but', 'if', 'because', 'as', 'what',

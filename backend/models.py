@@ -159,21 +159,11 @@ class Paper(BaseModel):
         # Join with newlines to create clear section separation
         return "\n\n".join(sections)
 
-# Define request and response models
+# Define request model
 class SearchRequest(BaseModel):
     """
     Schema for search requests
     """
     query: str
-    top_k: Optional[int] = 5
-    use_llm: Optional[bool] = False
-
-class SearchResponse(BaseModel):
-    papers: List[Dict[str, Any]]
-
-class QueryRequest(BaseModel):
-    """
-    Schema for chat query requests
-    """
-    query: str
+    top_k: Optional[int] = 10
     use_llm: Optional[bool] = True

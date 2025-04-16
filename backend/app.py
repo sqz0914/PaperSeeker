@@ -1,17 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 import json
-import os
 import logging
-import asyncio
-import random
-from typing import List, Dict, Any, Optional
+from typing import Dict, Any
 from pydantic import BaseModel
-from models import Paper, SearchRequest, QueryRequest
+from models import SearchRequest
 from vector_search import VectorSearch
 from llm_processor import LLMProcessor
-import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,9 +28,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Welcome message for the chatbot
-WELCOME_MESSAGE = "Hello! I'm PaperSeeker. Ask me about research papers using vector similarity search powered by Llama 3.2."
-
 # Initialize vector search
 vector_search = None
 llm_processor = None
@@ -54,9 +46,7 @@ except ValueError as e:
 except Exception as e:
     logger.error(f"Failed to initialize vector search engine: {e}")
 
-
 vector_search_status = "available" if vector_search else "unavailable"
-
 
 @app.get("/")
 def read_root():
@@ -90,9 +80,9 @@ async def search(request: SearchRequest):
             
             if not matched_papers:
                 return {
-                    "introduction": f"I couldn't find any papers matching your query '{query}'.",
+                    "introduction": "",
                     "papers": [],
-                    "conclusion": "Try a different search term or check that the vector database has been populated with papers."
+                    "conclusion": f"I couldn't find any papers matching your query '{query}'."
                 }
             
             # If LLM reranking is requested and available
@@ -165,9 +155,9 @@ async def search(request: SearchRequest):
                     # If we have no valid papers, return an appropriate message
                     if not simplified_papers:
                         return {
-                            "introduction": f"I couldn't find any papers matching your query '{query}'.",
+                            "introduction": "",
                             "papers": [],
-                            "conclusion": "Try a different search term or check that your papers have complete metadata."
+                            "conclusion": f"I couldn't find any papers matching your query '{query}'."
                         }
                     
                     # Return the simplified structured response
@@ -215,29 +205,26 @@ async def search(request: SearchRequest):
             
             if not simplified_papers:
                 return {
-                    "introduction": f"I couldn't find any papers matching your query '{query}'.",
+                    "introduction": "",
                     "papers": [],
-                    "conclusion": "Try a different search term or check that your papers have complete metadata."
+                    "conclusion": f"I couldn't find any papers matching your query '{query}'."
                 }
             
             return {
                 "introduction": "",
                 "papers": simplified_papers,
-                "conclusion": f"Found {len(simplified_papers)} papers related to your query about '{query}'. These papers were found based on vector similarity search."
+                "conclusion": f"Found {len(simplified_papers)} papers related to your query about '{query}'."
             }
         except Exception as e:
             logger.error(f"Vector search failed: {e}")
-            logger.info("Falling back to text-based search")
+            logger.info("No search results found")
     
-    # Fallback to text-based search with the same structure
+    # Return empty results if vector search is not available
     return {
         "introduction": "",
         "papers": [],
         "conclusion": f"I couldn't find any papers matching your query '{query}'. Vector search is not available."
     }
-
-
-
 
 # Run the API server when this script is executed directly
 if __name__ == "__main__":

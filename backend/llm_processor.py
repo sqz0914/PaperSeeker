@@ -32,41 +32,31 @@ class LLMProcessor:
         Extract and format relevant information from a paper for LLM processing
         
         Args:
-            paper: Paper object or dictionary
+            paper: Paper dictionary
             
         Returns:
             Dictionary with formatted paper information
         """
         try:
-            # Try to convert to Paper object if it's a dict
-            if isinstance(paper, dict):
-                try:
-                    paper_obj = Paper.parse_obj(paper)
-                    paper_text = paper_obj.prepare_paper_embedding_content()
-                except Exception as e:
-                    logger.warning(f"Error creating Paper object: {e}, using fallback method")
-                    # Fallback method - extract fields manually
-                    paper_text = self._fallback_paper_text(paper)
-            else:
-                paper_text = paper.prepare_paper_embedding_content()
+            # Extract paper text
+            try:
+                paper_obj = Paper.parse_obj(paper)
+                paper_text = paper_obj.prepare_paper_embedding_content()
+            except Exception as e:
+                logger.warning(f"Error creating Paper object: {e}, using fallback method")
+                # Fallback method - extract fields manually
+                paper_text = self._fallback_paper_text(paper)
             
             # Get scores
             bm25_score = paper.get('bm25_score', 0)
             similarity_score = paper.get('similarity_score', 0)
             
             # Get metadata
-            if isinstance(paper, dict):
-                title = paper.get('metadata', {}).get('title', '') or paper.get('title', '')
-                abstract = paper.get('metadata', {}).get('abstract', '') or paper.get('abstract', '')
-                year = paper.get('metadata', {}).get('year', '') or paper.get('year', '')
-                authors = self._get_authors(paper)
-                citation = self._get_citation(paper)
-            else:
-                title = paper.title
-                abstract = paper.abstract if paper.abstract else ''
-                year = paper.year if paper.year else ''
-                authors = ', '.join(paper.authors) if hasattr(paper, 'authors') and paper.authors else ''
-                citation = self._get_citation(paper)
+            title = paper.get('metadata', {}).get('title', '') or paper.get('title', '')
+            abstract = paper.get('metadata', {}).get('abstract', '') or paper.get('abstract', '')
+            year = paper.get('metadata', {}).get('year', '') or paper.get('year', '')
+            authors = self._get_authors(paper)
+            citation = self._get_citation(paper)
             
             return {
                 "title": title,

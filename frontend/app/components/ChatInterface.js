@@ -179,7 +179,7 @@ const ChatInterface = () => {
         
         <div className="mt-3 text-xs text-gray-500">
           <p>
-            Ask questions like "Find papers about climate change mitigation strategies."
+            Ask questions like "Find papers about machine learning."
           </p>
         </div>
       </div>

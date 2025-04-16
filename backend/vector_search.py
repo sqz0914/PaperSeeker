@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from models import Paper
 from rank_bm25 import BM25Okapi
-import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 
@@ -62,69 +61,6 @@ def simple_tokenize(text):
     
     return tokens
 
-# Windows-specific NLTK data path setup
-def setup_nltk_for_windows():
-    """
-    Attempt to set up NLTK data paths for Windows environments
-    """
-    # Common locations on Windows systems
-    possible_paths = [
-        os.path.join(os.environ.get('APPDATA', ''), 'nltk_data'),
-        os.path.join(os.environ.get('LOCALAPPDATA', ''), 'nltk_data'),
-        'C:/nltk_data',
-        'D:/nltk_data',
-        os.path.join(os.path.expanduser('~'), 'nltk_data')
-    ]
-    
-    # Add all possible paths to NLTK's search path
-    for path in possible_paths:
-        if os.path.exists(path):
-            nltk.data.path.append(path)
-            logger.info(f"Added NLTK data path: {path}")
-    
-    # Try to create a directory if none exists
-    if not any(os.path.exists(path) for path in possible_paths):
-        try:
-            os.makedirs(os.path.join(os.environ.get('LOCALAPPDATA', ''), 'nltk_data'), exist_ok=True)
-            new_path = os.path.join(os.environ.get('LOCALAPPDATA', ''), 'nltk_data')
-            nltk.data.path.append(new_path)
-            logger.info(f"Created new NLTK data path: {new_path}")
-        except Exception as e:
-            logger.warning(f"Could not create NLTK data directory: {e}")
-
-# Detect if running on Windows - moved after logger initialization
-if os.name == 'nt':
-    logger.info("Windows environment detected, setting up special NLTK data paths")
-    setup_nltk_for_windows()
-
-# Ensure NLTK resources are downloaded
-try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    try:
-        nltk.download('punkt')
-    except Exception as e:
-        logger.warning(f"Could not download punkt: {e}. Using simple tokenization fallback.")
-        nltk_available = False
-
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    try:
-        nltk.download('stopwords')
-    except Exception as e:
-        logger.warning(f"Could not download stopwords: {e}. Stopwords will not be removed.")
-        nltk_available = False
-
-# Download punkt tab file specifically since it's required
-try:
-    nltk.data.find('tokenizers/punkt_tab')
-except LookupError:
-    try:
-        nltk.download('punkt')  # This should download punkt_tab as well
-    except Exception as e:
-        logger.warning(f"Could not download punkt_tab: {e}. Using simple tokenization fallback.")
-        nltk_available = False
 
 # Ollama API settings
 OLLAMA_API_URL = "http://localhost:11434/api/embeddings"
@@ -331,30 +267,18 @@ class VectorSearch:
         if not text:
             return []
         
-        try:
-            if nltk_available:
-                # Use NLTK tokenizer if available
-                tokens = word_tokenize(text.lower())
-                # Remove stopwords and non-alphabetic tokens
-                tokens = [token for token in tokens if token.isalpha() and token not in self.stop_words]
-            else:
-                # Use enhanced simple tokenizer as fallback
-                all_tokens = simple_tokenize(text)
-                tokens = [token for token in all_tokens if token not in self.stop_words]
-            
-            # Filter very common words in academic papers that might not be in standard stopwords
-            academic_stopwords = {'paper', 'study', 'research', 'method', 'data', 'result', 'results',
-                                'analysis', 'approach', 'model', 'figure', 'table', 'using', 'based',
-                                'proposed', 'show', 'shows', 'shown', 'used', 'use', 'uses', 'present',
-                                'presents', 'presented', 'describe', 'describes', 'described'}
-            
-            tokens = [token for token in tokens if token not in academic_stopwords]
-            
-            return tokens
-        except Exception as e:
-            logger.warning(f"Error in text preprocessing: {e}. Using simplified approach.")
-            # Ultra simple fallback - just return anything that looks like a word
-            return [w for w in re.findall(r'\b[a-z]{3,}\b', text.lower())]
+        # Use enhanced simple tokenizer as fallback
+        all_tokens = simple_tokenize(text)
+        tokens = [token for token in all_tokens if token not in self.stop_words]
+        
+        # Filter very common words in academic papers that might not be in standard stopwords
+        academic_stopwords = {'paper', 'study', 'research', 'method', 'data', 'result', 'results',
+                            'analysis', 'approach', 'model', 'figure', 'table', 'using', 'based',
+                            'proposed', 'show', 'shows', 'shown', 'used', 'use', 'uses', 'present',
+                            'presents', 'presented', 'describe', 'describes', 'described'}
+        
+        tokens = [token for token in tokens if token not in academic_stopwords]
+        return tokens
         
     def rerank_with_bm25(self, query: str, papers: List[Dict[str, Any]], top_k: int = 20) -> List[Dict[str, Any]]:
         """

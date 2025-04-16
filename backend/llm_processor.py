@@ -238,12 +238,7 @@ USER QUERY: "{query}"
 
 TASK:
 Generate a comprehensive answer to the user's query using the following academic papers as sources.
-First, ensure that each paper is truly relevant to the query "{query}" - if any paper seems unrelated, please ignore it.
-For each relevant paper, create a section that:
-1. Summarizes what the paper is about in relation to the query
-2. Includes the paper's title and year
-3. Shows a brief abstract
-4. Ends with a citation line
+Ensure that each paper is truly relevant to the query "{query}" - if any paper seems unrelated, please ignore it.
 
 PAPERS:
 """
@@ -261,18 +256,28 @@ PAPERS:
 """
 
         prompt += f"""
-IMPORTANT: Your response must be directly relevant to the query: "{query}". If you find the papers are not relevant to this topic, acknowledge this issue in your response and focus only on the papers that actually relate to the query.
+IMPORTANT: Your response must be directly relevant to the query: "{query}". If the papers are not relevant, acknowledge this issue in your response.
 
 RESPONSE FORMAT:
-Begin with a brief introduction directly addressing the query: "{query}".
-Then, for each relevant paper, create a section with:
-1. A paragraph summarizing what this paper contributes to answering the query about {query}
-2. The paper's title and year in bold
-3. A brief quote from the abstract (100-150 words)
-4. End with a source line formatted as: "Source: [citation]"
-5. Add a divider line "---" after each paper section
+You must provide your response in a valid JSON format like this:
 
-Conclude with a brief synthesis of what these papers collectively tell us about the query.
+```json
+{{
+  "introduction": "Brief introduction addressing the query about {query} (1-3 sentences)",
+  "papers": [
+    {{
+      "title": "Exact title of the paper as provided in the input",
+      "summary": "A near 100-word summary of what this paper contributes to the topic"
+    }},
+    ...more papers...
+  ],
+  "conclusion": "Brief conclusion summarizing what these papers collectively tell us about the query (1-3 sentences)"
+}}
+```
+
+Your response MUST be a valid JSON object with exactly these three fields: "introduction", "papers" (an array of objects with "title" and "summary"), and "conclusion".
+The title field MUST exactly match the original paper title from the input.
+Do not include any explanatory text outside the JSON structure.
 """
         
         return prompt
@@ -384,7 +389,7 @@ Conclude with a brief synthesis of what these papers collectively tell us about 
     
     def rerank_and_generate(self, query: str, papers: List[Dict[str, Any]], 
                           max_papers_for_rerank: int = 20,
-                          max_papers_for_response: int = 5) -> str:
+                          max_papers_for_response: int = 5) -> Dict[str, Any]:
         """
         Rerank papers using LLM and generate a comprehensive response
         
@@ -395,10 +400,14 @@ Conclude with a brief synthesis of what these papers collectively tell us about 
             max_papers_for_response: Maximum number of papers to include in final response
             
         Returns:
-            Formatted response with paper summaries and citations
+            Dictionary containing introduction, papers with summaries, and conclusion
         """
         if not papers:
-            return f"I couldn't find any research papers related to '{query}'. Please try a different search term or check if the papers database is properly loaded."
+            return {
+                "introduction": f"I couldn't find any research papers related to '{query}'.",
+                "papers": [],
+                "conclusion": "Please try a different search term or check if the papers database is properly loaded."
+            }
         
         # Limit papers to rerank
         papers_to_rerank = papers[:max_papers_for_rerank]
@@ -430,18 +439,44 @@ Conclude with a brief synthesis of what these papers collectively tell us about 
             logger.warning("No valid paper indices found, using top papers by vector/BM25 score")
             top_papers = prepared_papers[:max_papers_for_response]
         
+        # Create a mapping of paper title to original paper
+        title_to_paper = {}
+        for i, paper in enumerate(papers_to_rerank):
+            # Get title from either metadata or direct field
+            title = paper.get('metadata', {}).get('title', '') or paper.get('title', '')
+            if title:
+                title_to_paper[title] = paper
+        
         # Prepare response generation prompt
         response_prompt = self._prepare_response_generation_prompt(query, top_papers)
         
         # Call LLM for response generation
         logger.info(f"Sending response generation prompt to LLM (length: {len(response_prompt)})")
-        final_response = self.call_llm(response_prompt)
+        llm_response = self.call_llm(response_prompt)
         
-        return final_response
+        # Parse the JSON response
+        parsed_response = self.parse_llm_response(llm_response)
+        
+        # Attach original paper data to each paper in the response
+        for paper_summary in parsed_response["papers"]:
+            title = paper_summary.get("title", "")
+            if title in title_to_paper:
+                # Attach the original paper data
+                paper_summary["paper_data"] = title_to_paper[title]
+            else:
+                # Try to find a close match
+                for paper_title, paper_obj in title_to_paper.items():
+                    # Check if the title is contained within or vice versa
+                    if (title.lower() in paper_title.lower() or 
+                        paper_title.lower() in title.lower()):
+                        paper_summary["paper_data"] = paper_obj
+                        break
+        
+        return parsed_response
     
     async def rerank_and_generate_async(self, query: str, papers: List[Dict[str, Any]], 
                                     max_papers_for_rerank: int = 20,
-                                    max_papers_for_response: int = 5) -> str:
+                                    max_papers_for_response: int = 5) -> Dict[str, Any]:
         """
         Asynchronous version of rerank_and_generate
         
@@ -452,8 +487,15 @@ Conclude with a brief synthesis of what these papers collectively tell us about 
             max_papers_for_response: Maximum number of papers to include in final response
             
         Returns:
-            Formatted response with paper summaries and citations
+            Dictionary containing introduction, papers with summaries, and conclusion
         """
+        if not papers:
+            return {
+                "introduction": f"I couldn't find any research papers related to '{query}'.",
+                "papers": [],
+                "conclusion": "Please try a different search term or check if the papers database is properly loaded."
+            }
+            
         # Limit papers to rerank
         papers_to_rerank = papers[:max_papers_for_rerank]
         
@@ -475,6 +517,7 @@ Conclude with a brief synthesis of what these papers collectively tell us about 
         
         # Limit to max_papers_for_response
         top_indices = top_indices[:max_papers_for_response]
+        print(top_indices)
         
         # Get the top papers
         top_papers = [prepared_papers[idx] for idx in top_indices if idx < len(prepared_papers)]
@@ -484,14 +527,101 @@ Conclude with a brief synthesis of what these papers collectively tell us about 
             logger.warning("No valid paper indices found, using top papers by vector/BM25 score")
             top_papers = prepared_papers[:max_papers_for_response]
         
+        # Create a mapping of paper title to original paper
+        title_to_paper = {}
+        for i, paper in enumerate(papers_to_rerank):
+            # Get title from either metadata or direct field
+            title = paper.get('metadata', {}).get('title', '') or paper.get('title', '')
+            if title:
+                title_to_paper[title] = paper
+        
         # Prepare response generation prompt
         response_prompt = self._prepare_response_generation_prompt(query, top_papers)
         
         # Call LLM for response generation
         logger.info(f"Sending response generation prompt to LLM (length: {len(response_prompt)})")
-        final_response = await self.call_llm_async(response_prompt)
+        llm_response = await self.call_llm_async(response_prompt)
         
-        return final_response
+        # Parse the JSON response
+        parsed_response = self.parse_llm_response(llm_response)
+        
+        # Attach original paper data to each paper in the response
+        for paper_summary in parsed_response["papers"]:
+            title = paper_summary.get("title", "")
+            if title in title_to_paper:
+                # Attach the original paper data
+                paper_summary["paper_data"] = title_to_paper[title]
+            else:
+                # Try to find a close match
+                for paper_title, paper_obj in title_to_paper.items():
+                    # Check if the title is contained within or vice versa
+                    if (title.lower() in paper_title.lower() or 
+                        paper_title.lower() in title.lower()):
+                        paper_summary["paper_data"] = paper_obj
+                        break
+        
+        return parsed_response
+
+    def parse_llm_response(self, llm_response: str) -> Dict[str, Any]:
+        """
+        Parse the LLM response from JSON format to a structured dictionary
+        
+        Args:
+            llm_response: The raw response from the LLM
+            
+        Returns:
+            Structured dictionary containing introduction, papers, and conclusion
+        """
+        # Define default response structure
+        default_response = {
+            "introduction": "I've analyzed some relevant papers for your query.",
+            "papers": [],
+            "conclusion": "These papers provide insights into your topic of interest."
+        }
+        
+        try:
+            # First, try to find JSON content within the response
+            json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', llm_response)
+            if json_match:
+                json_content = json_match.group(1)
+            else:
+                # If no JSON code block found, try to find anything that looks like JSON
+                json_match = re.search(r'(\{[\s\S]*\})', llm_response)
+                if json_match:
+                    json_content = json_match.group(1)
+                else:
+                    logger.warning("No JSON content found in LLM response")
+                    return default_response
+            
+            # Parse the JSON content
+            parsed_response = json.loads(json_content)
+            
+            # Validate the structure
+            if not isinstance(parsed_response, dict):
+                logger.warning("JSON response is not a dictionary")
+                return default_response
+            
+            # Check for required fields
+            if "introduction" not in parsed_response:
+                logger.warning("JSON response missing 'introduction' field")
+                parsed_response["introduction"] = default_response["introduction"]
+            
+            if "papers" not in parsed_response or not isinstance(parsed_response["papers"], list):
+                logger.warning("JSON response missing or invalid 'papers' field")
+                parsed_response["papers"] = default_response["papers"]
+            
+            if "conclusion" not in parsed_response:
+                logger.warning("JSON response missing 'conclusion' field")
+                parsed_response["conclusion"] = default_response["conclusion"]
+            
+            return parsed_response
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON from LLM response: {e}")
+            return default_response
+        except Exception as e:
+            logger.error(f"Error parsing LLM response: {e}")
+            return default_response
 
 
 # Example usage

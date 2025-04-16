@@ -2,29 +2,45 @@
 
 import React from 'react';
 
-const ChatMessage = ({ message, isStreaming }) => {
+const ChatMessage = ({ message }) => {
   const isBot = message.sender === 'bot';
   
-  // Only show cursor when this message is actively streaming
-  const showCursor = isBot && isStreaming;
-  
+  // Thinking indicator
+  if (message.isThinking) {
+    return (
+      <div className="flex justify-start mb-4">
+        <div className="bg-gray-200 dark:bg-gray-800 p-3 rounded-lg max-w-[80%]">
+          <div className="flex items-center space-x-2">
+            <span className="text-gray-500">{message.text}</span>
+            <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex ${isBot ? 'justify-start' : 'justify-end'} mb-4`}>
-      <div className={`max-w-[80%] p-3 rounded-lg ${
-        isBot 
-          ? 'bg-gray-200 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-br-none' 
-          : 'bg-blue-500 text-white rounded-bl-none'
-      }`}>
-        <p className="text-sm">
+      <div 
+        className={`p-3 rounded-lg max-w-[80%] ${
+          isBot ? 'bg-gray-200 dark:bg-gray-800' : 'bg-blue-500 text-white'
+        }`}
+      >
+        {message.messageTitle && (
+          <div className="text-xs font-semibold mb-2 pb-1 border-b border-gray-300 dark:border-gray-600">
+            {message.messageTitle}
+          </div>
+        )}
+        
+        <div className="whitespace-pre-wrap break-words">
           {message.text}
-          {showCursor && (
-            <span className="inline-block w-2 h-4 ml-1 bg-gray-500 dark:bg-gray-400 animate-pulse"></span>
-          )}
-        </p>
+        </div>
+        
         {message.citation && (
-          <div className="mt-2 text-xs border-t pt-1 border-gray-300 dark:border-gray-700">
-            <p className="font-medium">Citation:</p>
-            <p>{message.citation}</p>
+          <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic border-t border-gray-300 dark:border-gray-600 pt-1">
+            <span className="font-medium">Source:</span> {message.citation}
           </div>
         )}
       </div>

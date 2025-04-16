@@ -54,64 +54,15 @@ except ValueError as e:
 except Exception as e:
     logger.error(f"Failed to initialize vector search engine: {e}")
 
-# Load papers from sample_papers.json as fallback
-def load_papers():
-    """Load papers from JSONL or JSON file as fallback when vector search is unavailable."""
-    try:
-        papers = []
-        papers_path = os.path.join(os.path.dirname(__file__), "sample_papers.json")
-        
-        with open(papers_path, 'r', encoding='utf-8') as f:
-            # Try to detect if it's a JSONL file (each line is a JSON object)
-            first_line = f.readline().strip()
-            # Reset file pointer to beginning
-            f.seek(0)
-            
-            if first_line.startswith('{') and first_line.endswith('}'):
-                # Likely JSONL format - each line is a separate JSON object
-                for line in f:
-                    if line.strip():  # Skip empty lines
-                        try:
-                            paper = json.loads(line.strip())
-                            papers.append(paper)
-                        except json.JSONDecodeError as e:
-                            logger.warning(f"Error parsing paper JSON: {e}")
-            else:
-                # Try standard JSON format (array of objects)
-                try:
-                    papers = json.load(f)
-                except json.JSONDecodeError:
-                    # If that fails, try parsing line by line
-                    f.seek(0)
-                    for line in f:
-                        if line.strip():  # Skip empty lines
-                            try:
-                                paper = json.loads(line.strip())
-                                papers.append(paper)
-                            except json.JSONDecodeError as e:
-                                logger.warning(f"Error parsing JSON line: {e}")
-        
-        logger.info(f"Loaded {len(papers)} papers from sample_papers.json")
-        return papers
-    except Exception as e:
-        logger.error(f"Error loading papers: {e}")
-        return []
 
-# Initialize papers as fallback
-papers = load_papers()
 vector_search_status = "available" if vector_search else "unavailable"
-if not vector_search:
-    if papers:
-        logger.info(f"Vector search unavailable, using text-based search with {len(papers)} loaded papers")
-    else:
-        logger.warning("Neither vector search nor fallback papers are available. API will have limited functionality.")
+
 
 @app.get("/")
 def read_root():
     """Root endpoint providing basic information about the API"""
     return {
         "message": "Welcome to PaperSeeker API",
-        "papers_loaded": len(papers),
         "vector_search": vector_search_status
     }
 
@@ -134,331 +85,147 @@ async def search(request: SearchRequest):
             matched_papers = vector_search.search(query, limit=limit)
             logger.info(f"Vector search found {len(matched_papers)} papers matching query: '{query}'")
             
+            # Filter out papers without essential data
+            matched_papers = [p for p in matched_papers if p.get("metadata", {}).get("title")]
+            
+            if not matched_papers:
+                return {
+                    "introduction": f"I couldn't find any papers matching your query '{query}'.",
+                    "papers": [],
+                    "conclusion": "Try a different search term or check that the vector database has been populated with papers."
+                }
+            
             # If LLM reranking is requested and available
             if use_llm and llm_processor and matched_papers:
                 try:
                     logger.info("Starting LLM reranking and response generation")
-                    llm_response = llm_processor.rerank_and_generate(
+                    structured_response = llm_processor.rerank_and_generate(
                         query=query,
                         papers=matched_papers,
                         max_papers_for_rerank=limit,
                         max_papers_for_response=top_k
                     )
                     
-                    # Parse the LLM response to extract paper sections
-                    # Find sections divided by "---"
-                    paper_sections = re.split(r'\n---\n', llm_response)
+                    # Log the raw response for debugging
+                    logger.info(f"LLM structured response format: {structured_response.keys()}")
+                    if "papers" in structured_response:
+                        logger.info(f"Number of papers in response: {len(structured_response['papers'])}")
                     
-                    # Return both the raw response and structured data
+                    # Format the response in the exact structure requested
+                    introduction = structured_response.get("introduction", "")
+                    conclusion = structured_response.get("conclusion", "")
+                    raw_papers = structured_response.get("papers", [])
+                    
+                    # Format each paper with only the required fields
+                    simplified_papers = []
+                    for paper_info in raw_papers:
+                        # Skip papers without essential data
+                        if not paper_info.get("title") or not paper_info.get("paper_data"):
+                            logger.warning(f"Skipping paper with missing title or data")
+                            continue
+                            
+                        paper_data = paper_info.get("paper_data", {})
+                        metadata = paper_data.get("metadata", {})
+                        
+                        # Extract citation information
+                        sources = ""
+                        if metadata.get("external_ids"):
+                            ext_ids = []
+                            for ext_id in metadata["external_ids"]:
+                                if ext_id.get("source") and ext_id.get("id"):
+                                    ext_ids.append(f"{ext_id['source']}: {ext_id['id']}")
+                            if ext_ids:
+                                sources = ", ".join(ext_ids)
+                        
+                        # Create simplified paper object with clear indicators for missing data
+                        title = paper_info.get("title", "")
+                        abstract = metadata.get("abstract", "")
+                        summary = paper_info.get("summary", "")
+                        year = metadata.get("year", "") or paper_data.get("year", "")
+                        
+                        # Skip papers with missing title
+                        if not title:
+                            continue
+                            
+                        simplified_paper = {
+                            "title": title,
+                            "abstract": abstract if abstract else "[Abstract not available]",
+                            "summary": summary if summary else "[Summary not available]",
+                            "year": year if year else "[Year not available]",
+                            "sources": sources if sources else "[Sources not available]"
+                        }
+                        simplified_papers.append(simplified_paper)
+                    
+                    # If we have no valid papers, return an appropriate message
+                    if not simplified_papers:
+                        return {
+                            "introduction": f"I found some potential matches for '{query}', but they didn't contain enough information to present.",
+                            "papers": [],
+                            "conclusion": "Try a different search term or check that your papers have complete metadata."
+                        }
+                    
+                    # Return the simplified structured response
                     return {
-                        "papers": matched_papers[:top_k],
-                        "llm_response": llm_response,
-                        "paper_sections": paper_sections
+                        "introduction": introduction,
+                        "papers": simplified_papers,
+                        "conclusion": conclusion
                     }
                 except Exception as e:
                     logger.error(f"LLM reranking failed: {e}")
-                    # Fall back to standard results
-                    return {"papers": matched_papers[:top_k]}
-            else:
-                return {"papers": matched_papers[:top_k]}
+                    # Fall back to standard results but format them in the required structure
+            
+            # Format standard results in the required structure for consistency
+            simplified_papers = []
+            for paper in matched_papers[:top_k]:
+                metadata = paper.get("metadata", {})
+                
+                # Skip papers with missing title
+                if not metadata.get("title"):
+                    continue
+                    
+                sources = ""
+                if metadata.get("external_ids"):
+                    ext_ids = []
+                    for ext_id in metadata["external_ids"]:
+                        if ext_id.get("source") and ext_id.get("id"):
+                            ext_ids.append(f"{ext_id['source']}: {ext_id['id']}")
+                    if ext_ids:
+                        sources = ", ".join(ext_ids)
+                
+                simplified_paper = {
+                    "title": metadata.get("title", ""),
+                    "abstract": metadata.get("abstract") if metadata.get("abstract") else "[Abstract not available]",
+                    "summary": f"This paper may be relevant to your query about '{query}'.",
+                    "year": metadata.get("year") if metadata.get("year") else "[Year not available]",
+                    "sources": sources if sources else "[Sources not available]"
+                }
+                simplified_papers.append(simplified_paper)
+            
+            if not simplified_papers:
+                return {
+                    "introduction": f"I found some potential matches for '{query}', but they didn't contain enough information to present.",
+                    "papers": [],
+                    "conclusion": "Try a different search term or check that your papers have complete metadata."
+                }
+            
+            return {
+                "introduction": f"Here are {len(simplified_papers)} papers related to your query about '{query}':",
+                "papers": simplified_papers,
+                "conclusion": "These papers were found based on vector similarity search."
+            }
         except Exception as e:
             logger.error(f"Vector search failed: {e}")
             logger.info("Falling back to text-based search")
     
-    # Fallback to text-based search
-    matched_papers = []
-    for paper in papers:
-        # Search in title
-        title = paper.get("metadata", {}).get("title", "").lower()
-        # Search in abstract
-        abstract = paper.get("metadata", {}).get("abstract", "").lower()
-        # Search in full text
-        text = paper.get("text", "").lower()
-        
-        # If query is found in any of these fields, add the paper to results
-        if query.lower() in title or query.lower() in abstract or query.lower() in text:
-            matched_papers.append(paper)
-            if len(matched_papers) >= top_k:
-                break
-    
-    logger.info(f"Text search found {len(matched_papers)} papers matching query: '{query}'")
-    return {"papers": matched_papers}
-
-@app.get("/papers/{paper_id}")
-async def get_paper(paper_id: str):
-    """Get a specific paper by its ID, parsed using the Paper model"""
-    for paper_data in papers:
-        if paper_data.get("id") == paper_id:
-            try:
-                # Parse the paper using our Paper model
-                paper = Paper.parse_data(paper_data)
-                # Convert to dict for JSON response
-                return paper.dict(exclude_none=True)
-            except Exception as e:
-                logger.error(f"Error parsing paper: {e}")
-                return {"error": "Failed to parse paper"}
-    
-    return {"error": "Paper not found"}
-
-@app.get("/papers")
-async def get_papers():
-    """Get all available papers"""
-    return {"papers": papers}
-
-@app.get("/api/topics")
-async def get_topics():
-    """Get all available topics/fields of study from the papers"""
-    topics = set()
-    
-    for paper in papers:
-        # Get fields of study from metadata
-        s2fields = paper.get("metadata", {}).get("s2fieldsofstudy", [])
-        extfields = paper.get("metadata", {}).get("extfieldsofstudy", [])
-        
-        # Add all fields to our set of topics
-        for field in s2fields:
-            topics.add(field)
-        for field in extfields:
-            topics.add(field)
-    
-    return {"topics": sorted(list(topics))}
-
-# Helper function for streaming text with typing effect
-async def stream_text(text: str, citation: str = None):
-    """Helper function to stream any text with typing effect"""
-    # First yield the type of message
-    yield json.dumps({"type": "start"}) + "\n"
-    
-    # Stream the response character by character
-    buffer = ""
-    for char in text:
-        buffer += char
-        # Send in small chunks to simulate typing
-        if len(buffer) >= 3 or char in ['.', ',', '!', '?', ' ']:
-            # Random delay to simulate realistic typing
-            await asyncio.sleep(random.uniform(0.01, 0.05))
-            yield json.dumps({"type": "chunk", "content": buffer}) + "\n"
-            buffer = ""
-    
-    # Send any remaining characters
-    if buffer:
-        yield json.dumps({"type": "chunk", "content": buffer}) + "\n"
-    
-    # Send citation separately
-    if citation:
-        await asyncio.sleep(0.5)  # Pause before citation
-        yield json.dumps({"type": "citation", "content": citation}) + "\n"
-    
-    # Send end message
-    yield json.dumps({"type": "end"}) + "\n"
-
-# Stream the response for a query
-async def stream_response(query: str):
-    """Stream a response character by character with realistic typing delays"""
-    if vector_search and llm_processor:
-        try:
-            # Try to use vector search with LLM processing
-            matched_papers = vector_search.search(query, limit=20)
-            if matched_papers:
-                try:
-                    logger.info("Generating LLM response for streaming")
-                    llm_response = await llm_processor.rerank_and_generate_async(
-                        query=query,
-                        papers=matched_papers,
-                        max_papers_for_rerank=20,
-                        max_papers_for_response=5
-                    )
-                    
-                    # Stream the LLM-generated response
-                    async for chunk in stream_text(llm_response):
-                        yield chunk
-                    return
-                except Exception as e:
-                    logger.error(f"LLM response generation failed: {e}")
-                    # Fall back to simple response
-            
-            # LLM failed or not available, fall back to simple response
-            paper = matched_papers[0]
-            title = paper.get("metadata", {}).get("title", "")
-            abstract = paper.get("metadata", {}).get("abstract", "")
-            year = paper.get("metadata", {}).get("year", "")
-            score = paper.get("similarity_score", 0)
-            
-            # Get citation from external IDs
-            citation = None
-            if paper.get("metadata", {}).get("external_ids"):
-                ext_ids = []
-                for ext_id in paper["metadata"]["external_ids"]:
-                    if ext_id.get("source") and ext_id.get("id"):
-                        ext_ids.append(f"{ext_id['source']}: {ext_id['id']}")
-            
-            if ext_ids:
-                citation = ", ".join(ext_ids)
-            
-            # Generate a more informative response using the paper data
-            response = f"I found a paper that might be relevant (similarity score: {score:.2f}): '{title}' ({year}). {abstract[:300]}..."
-            
-            async for chunk in stream_text(response, citation):
-                yield chunk
-            return
-        except Exception as e:
-            logger.error(f"Vector search failed in streaming: {e}")
-            # Fall back to text search
-    
-    # Text-based search fallback
-    for paper in papers:
-        title = paper.get("metadata", {}).get("title", "").lower()
-        abstract = paper.get("metadata", {}).get("abstract", "").lower()
-        text = paper.get("text", "").lower()
-        
-        if query.lower() in title or query.lower() in abstract or query.lower() in text:
-            # Format the response in a way the frontend expects
-            citation = None
-            if paper.get("metadata", {}).get("external_ids"):
-                ext_ids = []
-                for ext_id in paper["metadata"]["external_ids"]:
-                    if ext_id.get("source") and ext_id.get("id"):
-                        ext_ids.append(f"{ext_id['source']}: {ext_id['id']}")
-            
-            if ext_ids:
-                citation = ", ".join(ext_ids)
-            
-            title = paper.get("metadata", {}).get("title", "")
-            abstract = paper.get("metadata", {}).get("abstract", "")
-            year = paper.get("metadata", {}).get("year", "")
-            
-            response = f"I found a paper that might be relevant: '{title}' ({year}). {abstract[:300]}..."
-            
-            async for chunk in stream_text(response, citation):
-                yield chunk
-            return
-    
-    # Default response if no match found
-    response = "I couldn't find any papers matching your query. Could you try a different search term?"
-    async for chunk in stream_text(response):
-        yield chunk
-
-@app.post("/api/search")
-def api_search_papers(request: QueryRequest):
-    """Simple search API for the chat interface"""
-    query = request.query
-    use_llm = request.use_llm if hasattr(request, 'use_llm') else True
-    
-    if vector_search:
-        try:
-            # Try vector search first
-            matched_papers = vector_search.search(query, limit=20)
-            
-            # If LLM is available and requested, use it for response generation
-            if use_llm and llm_processor and matched_papers:
-                try:
-                    llm_response = llm_processor.rerank_and_generate(
-                        query=query,
-                        papers=matched_papers,
-                        max_papers_for_rerank=20,
-                        max_papers_for_response=5
-                    )
-                    
-                    # Extract citation from the response
-                    citation = None
-                    if "Source:" in llm_response:
-                        # Find the first source line
-                        match = re.search(r'Source:\s*(.+?)($|\n)', llm_response)
-                        if match:
-                            citation = match.group(1).strip()
-                    
-                    return {
-                        "response": llm_response,
-                        "citation": citation
-                    }
-                except Exception as e:
-                    logger.error(f"LLM response generation failed: {e}")
-                    # Fall back to standard response
-            
-            if matched_papers:
-                paper = matched_papers[0]
-                title = paper.get("metadata", {}).get("title", "")
-                abstract = paper.get("metadata", {}).get("abstract", "")
-                year = paper.get("metadata", {}).get("year", "")
-                score = paper.get("similarity_score", 0)
-                
-                # Get citation from external IDs
-                citation = None
-                if paper.get("metadata", {}).get("external_ids"):
-                    ext_ids = []
-                    for ext_id in paper["metadata"]["external_ids"]:
-                        if ext_id.get("source") and ext_id.get("id"):
-                            ext_ids.append(f"{ext_id['source']}: {ext_id['id']}")
-                    
-                    if ext_ids:
-                        citation = ", ".join(ext_ids)
-                
-                return {
-                    "response": f"I found a paper that might be relevant (similarity score: {score:.2f}): '{title}' ({year}). {abstract[:300]}...",
-                    "citation": citation
-                }
-        except Exception as e:
-            logger.error(f"Vector search failed in API search: {e}")
-            # Fall back to text search
-    
-    # Text-based search as fallback
-    for paper in papers:
-        title = paper.get("metadata", {}).get("title", "").lower()
-        abstract = paper.get("metadata", {}).get("abstract", "").lower()
-        text = paper.get("text", "").lower()
-        
-        if query.lower() in title or query.lower() in abstract or query.lower() in text:
-            # Format the response in a way the frontend expects
-            citation = None
-            if paper.get("metadata", {}).get("external_ids"):
-                ext_ids = []
-                for ext_id in paper["metadata"]["external_ids"]:
-                    if ext_id.get("source") and ext_id.get("id"):
-                        ext_ids.append(f"{ext_id['source']}: {ext_id['id']}")
-                
-                if ext_ids:
-                    citation = ", ".join(ext_ids)
-            
-            title = paper.get("metadata", {}).get("title", "")
-            abstract = paper.get("metadata", {}).get("abstract", "")
-            year = paper.get("metadata", {}).get("year", "")
-            
-            return {
-                "response": f"I found a paper that might be relevant: '{title}' ({year}). {abstract[:300]}...",
-                "citation": citation
-            }
-    
-    # Default response if no match found
+    # Fallback to text-based search with the same structure
     return {
-        "response": "I couldn't find any papers matching your query. Could you try a different search term?",
-        "citation": None
+        "introduction": f"I couldn't find any papers matching your query '{query}'.",
+        "papers": [],
+        "conclusion": "Vector search is not available and text-based search didn't return any results."
     }
 
-@app.post("/api/stream")
-async def stream_search(request: QueryRequest):
-    """Endpoint that streams the response"""
-    return StreamingResponse(
-        stream_response(request.query),
-        media_type="text/event-stream"
-    )
 
-@app.get("/api/welcome")
-async def welcome_message():
-    """Stream the welcome message"""
-    return StreamingResponse(
-        stream_text(WELCOME_MESSAGE),
-        media_type="text/event-stream"
-    )
 
-# Cleanup on shutdown
-@app.on_event("shutdown")
-def shutdown_event():
-    if vector_search:
-        try:
-            vector_search.close()
-            logger.info("Vector search resources released")
-        except Exception as e:
-            logger.error(f"Error closing vector search: {e}")
 
 # Run the API server when this script is executed directly
 if __name__ == "__main__":

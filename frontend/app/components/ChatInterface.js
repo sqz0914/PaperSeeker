@@ -74,7 +74,12 @@ const ChatInterface = () => {
       // Add messages for each paper first
       const papers = data.papers || [];
       if (papers.length > 0) {
-        papers.forEach((paper, index) => {
+        // Filter out any duplicate papers by title
+        const uniquePapers = papers.filter((paper, index, self) => 
+          index === self.findIndex(p => p.title.toLowerCase() === paper.title.toLowerCase())
+        );
+        
+        uniquePapers.forEach((paper, index) => {
           // Format paper content
           const title = (paper.title || '').trim();
           const year = paper.year || '';
@@ -90,9 +95,9 @@ const ChatInterface = () => {
             text: paperContent,
             sender: 'bot',
             citation: sources,
-            messageTitle: `Paper ${index + 1} of ${papers.length}`,
+            messageTitle: `Paper ${index + 1} of ${uniquePapers.length}`,
             paperIndex: index + 1,
-            totalPapers: papers.length
+            totalPapers: uniquePapers.length
           });
         });
       }

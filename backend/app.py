@@ -118,6 +118,8 @@ async def search(request: SearchRequest):
                     
                     # Format each paper with only the required fields
                     simplified_papers = []
+                    seen_titles = set()  # Track titles to prevent duplicates
+                    
                     for paper_info in raw_papers:
                         # Skip papers without essential data
                         if not paper_info.get("title") or not paper_info.get("paper_data"):
@@ -126,6 +128,20 @@ async def search(request: SearchRequest):
                             
                         paper_data = paper_info.get("paper_data", {})
                         metadata = paper_data.get("metadata", {})
+                        
+                        # Create simplified paper object with clear indicators for missing data
+                        title = paper_info.get("title", "").strip()
+                        
+                        # Skip papers with missing title or duplicates
+                        if not title or title.lower() in seen_titles:
+                            continue
+                            
+                        # Add title to seen set to prevent duplicates
+                        seen_titles.add(title.lower())
+                        
+                        abstract = metadata.get("abstract", "").strip() if metadata.get("abstract") else "[Abstract not available]"
+                        summary = paper_info.get("summary", "").strip()
+                        year = metadata.get("year", "") or paper_data.get("year", "")
                         
                         # Extract citation information
                         sources = ""
@@ -137,16 +153,6 @@ async def search(request: SearchRequest):
                             if ext_ids:
                                 sources = ", ".join(ext_ids)
                         
-                        # Create simplified paper object with clear indicators for missing data
-                        title = paper_info.get("title", "").strip()
-                        abstract = metadata.get("abstract", "").strip() if metadata.get("abstract") else "[Abstract not available]"
-                        summary = paper_info.get("summary", "").strip()
-                        year = metadata.get("year", "") or paper_data.get("year", "")
-                        
-                        # Skip papers with missing title
-                        if not title:
-                            continue
-                            
                         simplified_paper = {
                             "title": title,
                             "abstract": abstract,
@@ -176,13 +182,19 @@ async def search(request: SearchRequest):
             
             # Format standard results in the required structure for consistency
             simplified_papers = []
+            seen_titles = set()  # Track titles to prevent duplicates
+            
             for paper in matched_papers[:top_k]:
                 metadata = paper.get("metadata", {})
                 
-                # Skip papers with missing title
-                if not metadata.get("title"):
+                # Get title and skip if missing or duplicate
+                title = metadata.get("title", "").strip()
+                if not title or title.lower() in seen_titles:
                     continue
                     
+                # Add to seen titles to prevent duplicates
+                seen_titles.add(title.lower())
+                
                 sources = ""
                 if metadata.get("external_ids"):
                     ext_ids = []
@@ -193,7 +205,7 @@ async def search(request: SearchRequest):
                         sources = ", ".join(ext_ids)
                 
                 simplified_paper = {
-                    "title": metadata.get("title", "").strip(),
+                    "title": title,
                     "abstract": metadata.get("abstract", "").strip() if metadata.get("abstract") else "[Abstract not available]",
                     "summary": f"This paper appears relevant to your query about '{query}'.",
                     "year": metadata.get("year") if metadata.get("year") else "[Year not available]",

@@ -151,7 +151,7 @@ def generate_chunked_embeddings(paper: Paper) -> Tuple[List[float], List[str]]:
         Tuple of (final embedding vector, list of chunks used)
     """
     # Prepare the formatted text content
-    paper_text = prepare_paper_embedding_content(paper.prepare_paper_embedding_content())
+    paper_text = paper.prepare_paper_embedding_content()
     
     # Initialize LangChain's RecursiveCharacterTextSplitter
     text_splitter = RecursiveCharacterTextSplitter(
@@ -436,8 +436,10 @@ def process_papers_stream(file_path: str, limit: Optional[int] = None):
 
 def main():
     """Main function that processes papers one by one."""
+    # paper data file from the argument
+    paper_data_file = sys.argv[1]
     # Path to sample papers
-    papers_path = os.path.join(os.path.dirname(__file__), "paper_data.json")
+    papers_path = os.path.join(os.path.dirname(__file__), paper_data_file)
     
     # Process papers one by one
     process_papers_stream(papers_path, limit=None)

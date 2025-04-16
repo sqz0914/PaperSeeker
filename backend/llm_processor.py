@@ -247,7 +247,9 @@ PAPERS:
         prompt += f"""
 IMPORTANT: 
 1. Your response must be directly relevant to the query: "{query}".
-2. Stick to the papers you are given. Do not make up new papers or use other papers.
+2. Look through all the papers and make sure you understand them.
+3. Stick to the papers you are given. Do not make up new papers or use other papers.
+4. If a paper is not relevant, don't include it in the response.
 
 RESPONSE FORMAT:
 You must provide your response in a valid JSON format like this:

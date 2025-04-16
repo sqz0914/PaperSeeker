@@ -212,11 +212,11 @@ PAPERS:
 IMPORTANT: Before responding, double check that your selected papers actually relate to "{query}". Papers about unrelated topics should NOT be included even if they have high similarity scores.
 
 RESPONSE FORMAT:
-Please provide your top 5 papers in order of relevance, numbered from 1 to 5. For each paper, include:
+Please provide your top 10 papers in order of relevance, numbered from 1 to 10. For each paper, include:
 1. Paper number from the input list [PAPER X]
 2. A 2-3 sentence explanation of why this paper is relevant to the query: "{query}"
 
-Then list ONLY the paper numbers of your top 5 choices in a single line like this: "SELECTED: 3, 7, 12, 2, 9"
+Then list ONLY the paper numbers of your top 10 choices in a single line like this: "SELECTED: 3, 7, 12, 2, 9"
 """
         
         return prompt

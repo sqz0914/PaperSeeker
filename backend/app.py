@@ -73,14 +73,14 @@ async def search(request: SearchRequest):
     Returns papers where the query matches semantically using embeddings.
     """
     query = request.query
-    top_k = request.top_k if hasattr(request, 'top_k') else 5
+    top_k = request.top_k if hasattr(request, 'top_k') else 10  # Default to 10 papers
     use_llm = request.use_llm if hasattr(request, 'use_llm') else False
     
     # Use vector search if available
     if vector_search:
         try:
             # Get more results if we're using LLM reranking
-            limit = 20 if use_llm and llm_processor else top_k
+            limit = 30 if use_llm and llm_processor else top_k  # Increased from 20 to 30 for better diversity
             
             matched_papers = vector_search.search(query, limit=limit)
             logger.info(f"Vector search found {len(matched_papers)} papers matching query: '{query}'")
@@ -103,7 +103,7 @@ async def search(request: SearchRequest):
                         query=query,
                         papers=matched_papers,
                         max_papers_for_rerank=limit,
-                        max_papers_for_response=top_k
+                        max_papers_for_response=top_k  # Return top 10 papers after reranking
                     )
                     
                     # Log the raw response for debugging
@@ -138,9 +138,9 @@ async def search(request: SearchRequest):
                                 sources = ", ".join(ext_ids)
                         
                         # Create simplified paper object with clear indicators for missing data
-                        title = paper_info.get("title", "")
-                        abstract = metadata.get("abstract", "")
-                        summary = paper_info.get("summary", "")
+                        title = paper_info.get("title", "").strip()
+                        abstract = metadata.get("abstract", "").strip() if metadata.get("abstract") else "[Abstract not available]"
+                        summary = paper_info.get("summary", "").strip()
                         year = metadata.get("year", "") or paper_data.get("year", "")
                         
                         # Skip papers with missing title
@@ -149,7 +149,7 @@ async def search(request: SearchRequest):
                             
                         simplified_paper = {
                             "title": title,
-                            "abstract": abstract if abstract else "[Abstract not available]",
+                            "abstract": abstract,
                             "summary": summary if summary else "[Summary not available]",
                             "year": year if year else "[Year not available]",
                             "sources": sources if sources else "[Sources not available]"
@@ -159,16 +159,16 @@ async def search(request: SearchRequest):
                     # If we have no valid papers, return an appropriate message
                     if not simplified_papers:
                         return {
-                            "introduction": f"I found some potential matches for '{query}', but they didn't contain enough information to present.",
+                            "introduction": f"I couldn't find any papers matching your query '{query}'.",
                             "papers": [],
                             "conclusion": "Try a different search term or check that your papers have complete metadata."
                         }
                     
                     # Return the simplified structured response
                     return {
-                        "introduction": introduction,
+                        "introduction": "",  # Empty introduction, focus on papers
                         "papers": simplified_papers,
-                        "conclusion": conclusion
+                        "conclusion": conclusion if conclusion else f"Found {len(simplified_papers)} papers related to your query about '{query}'."
                     }
                 except Exception as e:
                     logger.error(f"LLM reranking failed: {e}")
@@ -193,9 +193,9 @@ async def search(request: SearchRequest):
                         sources = ", ".join(ext_ids)
                 
                 simplified_paper = {
-                    "title": metadata.get("title", ""),
-                    "abstract": metadata.get("abstract") if metadata.get("abstract") else "[Abstract not available]",
-                    "summary": f"This paper may be relevant to your query about '{query}'.",
+                    "title": metadata.get("title", "").strip(),
+                    "abstract": metadata.get("abstract", "").strip() if metadata.get("abstract") else "[Abstract not available]",
+                    "summary": f"This paper appears relevant to your query about '{query}'.",
                     "year": metadata.get("year") if metadata.get("year") else "[Year not available]",
                     "sources": sources if sources else "[Sources not available]"
                 }
@@ -203,15 +203,15 @@ async def search(request: SearchRequest):
             
             if not simplified_papers:
                 return {
-                    "introduction": f"I found some potential matches for '{query}', but they didn't contain enough information to present.",
+                    "introduction": f"I couldn't find any papers matching your query '{query}'.",
                     "papers": [],
                     "conclusion": "Try a different search term or check that your papers have complete metadata."
                 }
             
             return {
-                "introduction": f"Here are {len(simplified_papers)} papers related to your query about '{query}':",
+                "introduction": "",
                 "papers": simplified_papers,
-                "conclusion": "These papers were found based on vector similarity search."
+                "conclusion": f"Found {len(simplified_papers)} papers related to your query about '{query}'. These papers were found based on vector similarity search."
             }
         except Exception as e:
             logger.error(f"Vector search failed: {e}")
@@ -219,9 +219,9 @@ async def search(request: SearchRequest):
     
     # Fallback to text-based search with the same structure
     return {
-        "introduction": f"I couldn't find any papers matching your query '{query}'.",
+        "introduction": "",
         "papers": [],
-        "conclusion": "Vector search is not available and text-based search didn't return any results."
+        "conclusion": f"I couldn't find any papers matching your query '{query}'. Vector search is not available."
     }
 
 

@@ -11,7 +11,7 @@ const ChatMessage = ({ message }) => {
       <div className="flex justify-start mb-4">
         <div className="bg-gray-200 dark:bg-gray-800 p-3 rounded-lg max-w-[80%]">
           <div className="flex items-center space-x-2">
-            <span className="text-gray-500">{message.text}</span>
+            <span className="text-gray-500 text-sm">{message.text}</span>
             <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
             <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
             <div className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
@@ -29,12 +29,12 @@ const ChatMessage = ({ message }) => {
         }`}
       >
         {message.messageTitle && (
-          <div className="text-xs font-semibold mb-2 pb-1 border-b border-gray-300 dark:border-gray-600">
+          <div className="text-xs font-semibold mb-1 pb-1 border-b border-gray-300 dark:border-gray-600">
             {message.messageTitle}
           </div>
         )}
         
-        <div className="whitespace-pre-wrap break-words">
+        <div className="whitespace-pre-wrap break-words text-sm">
           {message.text}
         </div>
         

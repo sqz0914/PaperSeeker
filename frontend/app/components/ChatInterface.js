@@ -67,35 +67,26 @@ const ChatInterface = () => {
       // Remove the thinking message
       setMessages(prev => prev.filter(msg => !msg.isThinking));
       
-      // Process structured response with introduction, papers, and conclusion
+      // Process structured response with papers and conclusion only
       const nextId = messages.length + 2; // +1 for user message, +1 as starting point
       const newMessages = [];
       
-      // Add introduction message
-      if (data.introduction) {
-        newMessages.push({
-          id: nextId,
-          text: data.introduction,
-          sender: 'bot',
-          messageTitle: 'Introduction'
-        });
-      }
-      
-      // Add messages for each paper
+      // Add messages for each paper first
       const papers = data.papers || [];
       if (papers.length > 0) {
         papers.forEach((paper, index) => {
           // Format paper content
-          const title = paper.title || '';
+          const title = (paper.title || '').trim();
           const year = paper.year || '';
-          const abstract = paper.abstract || '';
-          const summary = paper.summary || '';
+          const abstract = (paper.abstract || '').trim();
+          const summary = (paper.summary || '').trim();
           const sources = paper.sources || '';
           
+          // Format paper content with proper spacing
           const paperContent = `${title} ${year ? `(${year})` : ''}\n\nAbstract: ${abstract}\n\nSummary: ${summary}`;
           
           newMessages.push({
-            id: nextId + index + 1,
+            id: nextId + index,
             text: paperContent,
             sender: 'bot',
             citation: sources,
@@ -106,13 +97,21 @@ const ChatInterface = () => {
         });
       }
       
-      // Add conclusion message
+      // Add conclusion message at the end
       if (data.conclusion) {
         newMessages.push({
-          id: nextId + papers.length + 1,
+          id: nextId + papers.length,
           text: data.conclusion,
           sender: 'bot',
           messageTitle: papers.length > 0 ? 'Conclusion' : 'No Results'
+        });
+      } else if (data.introduction && papers.length === 0) {
+        // If no papers and no conclusion, use introduction as the error message
+        newMessages.push({
+          id: nextId,
+          text: data.introduction,
+          sender: 'bot',
+          messageTitle: 'No Results'
         });
       }
       

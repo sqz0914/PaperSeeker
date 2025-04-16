@@ -63,11 +63,10 @@ PaperSeeker implements a sophisticated Retrieval-Augmented Generation (RAG) pipe
 2. **Retrieval Process**:
    - User queries are converted to the same vector space as the papers
    - Vector similarity search finds semantically related papers
-   - BM25 text search provides a fallback for keyword matching
-   - Results are combined using a hybrid approach for better coverage
+   - BM25 text search reranks papers from vector search
 
 3. **Reranking with LLM**:
-   - Top results from vector search are passed to the LLM
+   - Top results from vector search and BM25 are passed to the LLM
    - Custom prompting guides the LLM to evaluate relevance to the query
    - Papers are reranked based on semantic understanding, not just keyword matches
 

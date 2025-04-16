@@ -85,14 +85,14 @@ async def search(request: SearchRequest):
                     "conclusion": f"I couldn't find any papers matching your query '{query}'."
                 }
             
-            # If LLM reranking is requested and available
+            # If LLM filtering is requested and available
             if use_llm and llm_processor and matched_papers:
                 try:
-                    logger.info("Starting LLM reranking and response generation")
-                    structured_response = llm_processor.rerank_and_generate(
+                    logger.info("Starting LLM filtering and response generation")
+                    structured_response = llm_processor.filter_and_generate(
                         query=query,
                         papers=matched_papers,
-                        max_papers_for_rerank=limit,
+                        max_papers_for_filter=limit,
                         max_papers_for_response=top_k  # Return top 10 papers after reranking
                     )
                     

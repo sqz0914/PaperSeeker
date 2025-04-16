@@ -82,8 +82,8 @@ const ChatInterface = () => {
           const summary = (paper.summary || '').trim();
           const sources = paper.sources || '';
           
-          // Format paper content with proper spacing
-          const paperContent = `${title} ${year ? `(${year})` : ''}\n\nAbstract: ${abstract}\n\nSummary: ${summary}`;
+          // Format paper content with proper spacing and newlines
+          const paperContent = `${title} ${year ? `(${year})` : ''}\n\nAbstract:\n${abstract}\n\nSummary:\n${summary}`;
           
           newMessages.push({
             id: nextId + index,

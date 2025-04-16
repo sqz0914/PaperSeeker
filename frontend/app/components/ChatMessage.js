@@ -40,7 +40,8 @@ const ChatMessage = ({ message }) => {
         
         {message.citation && (
           <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 italic border-t border-gray-300 dark:border-gray-600 pt-1">
-            <span className="font-medium">Source:</span> {message.citation}
+            <div className="font-medium">Source:</div>
+            {message.citation}
           </div>
         )}
       </div>

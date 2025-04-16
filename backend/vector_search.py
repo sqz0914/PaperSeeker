@@ -368,6 +368,8 @@ class VectorSearch:
                 reranked_papers[i]['bm25_score'] = score
                 
             logger.info(f"BM25 reranking complete, returning top {len(reranked_papers)} papers")
+            for i, paper in enumerate(reranked_papers):
+                logger.info(f"Paper {i+1}: {paper['metadata']['title']}")
             
             return reranked_papers
             

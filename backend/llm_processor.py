@@ -191,10 +191,10 @@ PAPERS:
 - Title: {paper['title']}
 - Year: {paper['year']}
 - Authors: {paper['authors']}
-- Abstract: {paper['abstract'][:300]}...
+- Abstract: {paper['abstract'][:500]}...
 - Vector Similarity Score: {paper['similarity_score']}
 - BM25 Score: {paper['bm25_score']}
-- Content Preview: {paper['full_text'][:500]}...
+- Content Preview: {paper['full_text'][:1000]}...
 
 """
 
@@ -241,15 +241,13 @@ PAPERS:
 - Authors: {paper['authors']}
 - Abstract: {paper['abstract']}
 - Content: {paper['full_text'][:1000]}...
-- Citation: {paper['citation']}
 
 """
 
         prompt += f"""
 IMPORTANT: 
-1. Your response must be directly relevant to the query: "{query}". If the papers are not relevant, acknowledge this issue in your response.
+1. Your response must be directly relevant to the query: "{query}".
 2. Stick to the papers you are given. Do not make up new papers or use other papers.
-3. Do not include any papers that are not in the list of top 10 papers.
 
 RESPONSE FORMAT:
 You must provide your response in a valid JSON format like this:
@@ -426,6 +424,8 @@ Do not include any explanatory text outside the JSON structure.
         
         # Get the top papers
         top_papers = [prepared_papers[idx] for idx in top_indices if idx < len(prepared_papers)]
+        for i, paper in enumerate(top_papers):
+            logger.info(f"Paper {i+1}: {paper['title']}")
         
         # If we couldn't parse any indices or the list is empty, use the first few papers
         if not top_papers:

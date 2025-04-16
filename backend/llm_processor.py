@@ -256,7 +256,10 @@ PAPERS:
 """
 
         prompt += f"""
-IMPORTANT: Your response must be directly relevant to the query: "{query}". If the papers are not relevant, acknowledge this issue in your response.
+IMPORTANT: 
+1. Your response must be directly relevant to the query: "{query}". If the papers are not relevant, acknowledge this issue in your response.
+2. Stick to the papers you are given. Do not make up new papers or use other papers.
+3. Do not include any papers that are not in the list of top 10 papers.
 
 RESPONSE FORMAT:
 You must provide your response in a valid JSON format like this:

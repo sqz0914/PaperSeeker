@@ -11,7 +11,7 @@ export async function POST(request) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query: requestData.query,
-        top_k: 10,  // Request 10 papers
+        top_k: 5,  // Request 10 papers
         use_llm: true
       })
     });

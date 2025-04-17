@@ -358,19 +358,20 @@ Your response MUST be in valid JSON format with exactly these two fields. Make s
 USER QUERY: "{query}"
 
 TASK:
-Determine whether the following paper is relevant to the query: "{query}".
-Focus only on the true semantic relevance, not just keyword matching.
+Determine whether the following paper might be relevant or useful to the query: "{query}".
+Be inclusive rather than exclusive - papers that are partially related could still provide useful insights.
+Consider both direct relevance and indirect connections that might still be valuable to the user.
 
 PAPER:
 - Title: {paper['title']}
 - Year: {paper['year']}
 - Authors: {paper['authors']}
 - Abstract: {paper['abstract']}
-- Content Preview: {paper['full_text'][:1500]}...
+- Content Preview: {paper['full_text']}
 
 RESPONSE FORMAT:
 Provide a JSON response with two fields:
-1. "relevant": true or false based on whether this paper is truly relevant to the query
+1. "relevant": true or false based on whether this paper is relevant to the query. Be lenient - if the paper might contain useful information even peripherally related to the query, consider it relevant.
 2. "reason": A brief explanation of why the paper is or is not relevant (2-3 sentences)
 
 Your response should be in this exact format:

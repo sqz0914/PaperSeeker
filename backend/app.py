@@ -63,7 +63,7 @@ async def search(request: SearchRequest):
     Returns papers where the query matches semantically using embeddings.
     """
     query = request.query
-    top_k = request.top_k if hasattr(request, 'top_k') else 10  # Default to 10 papers
+    top_k = request.top_k if hasattr(request, 'top_k') else 5  # Default to 5 papers
     use_llm = request.use_llm if hasattr(request, 'use_llm') else False
     
     # Use vector search if available

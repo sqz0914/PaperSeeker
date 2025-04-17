@@ -7,7 +7,7 @@ PaperSeeker is an advanced academic paper search engine that uses AI to find, an
 Key features:
 - Semantic search using vector embeddings (powered by Llama 3.2 model)
 - Hybrid search combining vector similarity with BM25 text search for improved accuracy
-- LLM-based reranking of search results to improve relevance
+- LLM-based filtering of search results to improve relevance
 - Augmented generation of paper summaries and insights
 - User-friendly web interface with chat-based interaction
 
@@ -77,7 +77,7 @@ PaperSeeker implements a sophisticated Retrieval-Augmented Generation (RAG) pipe
 
 5. **Response Formatting**:
    - Results are structured as JSON with clearly defined sections
-   - Frontend renders this in a user-friendly format with proper citations
+   - Frontend renders this in a user-friendly format with proper sources
 
 ## Running Instructions
 

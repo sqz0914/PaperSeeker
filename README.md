@@ -172,6 +172,10 @@ This project uses several open-source libraries and models:
 - Next.js for frontend
 - Zilliz Cloud/Milvus for vector database
 
+### Data Source
+
+We used the peS2o dataset (https://github.com/allenai/peS2o) for academic papers. This dataset is a collection of ~40M open-access academic papers that have been cleaned, filtered, and formatted for pre-training language models.
+
 ## License
 
 [MIT License](LICENSE)

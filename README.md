@@ -116,7 +116,7 @@ PaperSeeker implements a sophisticated Retrieval-Augmented Generation (RAG) pipe
 
 5. Generate embeddings for your papers:
    ```bash
-   python generate_embeddings.py --input your_papers.json
+   python generate_embeddings.py <paper data file>
    ```
 
 6. Start the backend server:

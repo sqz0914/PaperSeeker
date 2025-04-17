@@ -13,6 +13,7 @@ from pymilvus import DataType
 import os
 from dotenv import load_dotenv
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+import argparse
 
 # Load environment variables
 load_dotenv()
@@ -319,23 +320,79 @@ def setup_milvus_collection() -> MilvusClient:
         logger.error(f"Traceback: {traceback.format_exc()}")
         sys.exit(1)
 
-def process_papers_stream(file_path: str, limit: Optional[int] = None):
+def process_papers_stream(data_path: str, limit: Optional[int] = None):
     """
-    Process papers one at a time from the file in a streaming fashion.
+    Process papers from a single file or all files in a directory.
+    
+    Args:
+        data_path: Path to a file or directory containing papers
+        limit: Optional limit on the number of papers to process per file
+    """
+    try:
+        # Determine if the path is a directory or a file
+        is_directory = os.path.isdir(data_path)
+        
+        # Set up Milvus collection once before processing
+        milvus_client = setup_milvus_collection()
+        
+        if is_directory:
+            logger.info(f"Processing all paper data files in directory: {data_path}")
+            paper_files = [os.path.join(data_path, f) for f in os.listdir(data_path) 
+                          if f.endswith('.json') or f.endswith('.jsonl')]
+            
+            if not paper_files:
+                logger.error(f"No JSON or JSONL files found in {data_path}")
+                return
+            
+            logger.info(f"Found {len(paper_files)} paper data files to process")
+            
+            # Process each file
+            for i, file_path in enumerate(paper_files, 1):
+                logger.info(f"Processing file {i}/{len(paper_files)}: {file_path}")
+                process_single_file(file_path, milvus_client, limit)
+                logger.info(f"Completed file {i}/{len(paper_files)}")
+            
+            logger.info(f"All {len(paper_files)} paper data files have been processed")
+        else:
+            # Single file processing
+            logger.info(f"Processing single paper data file: {data_path}")
+            if not os.path.exists(data_path):
+                logger.error(f"File not found: {data_path}")
+                return
+            
+            process_single_file(data_path, milvus_client, limit)
+        
+        logger.info("Papers indexing process completed successfully")
+        
+        # Verify final collection size
+        try:
+            collection_stats = milvus_client.get_collection_stats(COLLECTION_NAME)
+            paper_count = collection_stats["row_count"]
+            logger.info(f"Milvus collection '{COLLECTION_NAME}' contains {paper_count} papers")
+        except Exception as e:
+            logger.error(f"Error checking collection stats: {e}")
+    
+    except Exception as e:
+        logger.error(f"Error in processing papers: {e}")
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        sys.exit(1)
+
+def process_single_file(file_path: str, milvus_client: MilvusClient, limit: Optional[int] = None):
+    """
+    Process a single paper data file.
     
     Args:
         file_path: Path to the file containing papers
+        milvus_client: MilvusClient instance
         limit: Optional limit on the number of papers to process
     """
+    # Track statistics
+    total_papers = 0
+    successful_papers = 0
+    failed_papers = 0
+    
     try:
-        # Set up Milvus collection
-        milvus_client = setup_milvus_collection()
-        
-        # Track statistics
-        total_papers = 0
-        successful_papers = 0
-        failed_papers = 0
-        
         # Detect file format and process papers one by one
         with open(file_path, 'r', encoding='utf-8') as f:
             # Try to detect if it's a JSONL file (each line is a JSON object)
@@ -404,47 +461,33 @@ def process_papers_stream(file_path: str, limit: Optional[int] = None):
                                 failed_papers += 1
                     else:
                         logger.error(f"Expected JSON array but got {type(papers_array)}")
-                        sys.exit(1)
                         
                 except json.JSONDecodeError:
                     logger.error(f"Could not parse {file_path} as either JSONL or JSON array")
-                    sys.exit(1)
-        
-        # Final flush to ensure all data is persisted
-        logger.info("Final flush to ensure all data is persisted")
-        milvus_client.flush(COLLECTION_NAME)
-        
-        # Verify collection size
-        try:
-            collection_stats = milvus_client.get_collection_stats(COLLECTION_NAME)
-            paper_count = collection_stats["row_count"]
-            logger.info(f"Milvus collection '{COLLECTION_NAME}' contains {paper_count} papers")
-        except Exception as e:
-            logger.error(f"Error checking collection stats: {e}")
-        
-        # Log summary statistics
-        logger.info(f"Processing complete!")
-        logger.info(f"Total papers processed: {total_papers}")
-        logger.info(f"Successfully indexed: {successful_papers}")
-        logger.info(f"Failed: {failed_papers}")
-        
+    
     except Exception as e:
-        logger.error(f"Error in processing papers: {e}")
-        import traceback
-        logger.error(f"Traceback: {traceback.format_exc()}")
-        sys.exit(1)
+        logger.error(f"Error processing file {file_path}: {e}")
+    
+    # Final flush to ensure all data is persisted for this file
+    logger.info("Flushing data to ensure persistence")
+    milvus_client.flush(COLLECTION_NAME)
+    
+    # Log summary statistics for this file
+    logger.info(f"File processing complete: {file_path}")
+    logger.info(f"Total papers processed: {total_papers}")
+    logger.info(f"Successfully indexed: {successful_papers}")
+    logger.info(f"Failed: {failed_papers}")
 
 def main():
-    """Main function that processes papers one by one."""
-    # paper data file from the argument
-    paper_data_file = sys.argv[1]
-    # Path to sample papers
-    papers_path = os.path.join(os.path.dirname(__file__), paper_data_file)
+    """Parse command line arguments and start the paper processing."""
+    parser = argparse.ArgumentParser(description="Generate embeddings for papers and index them in Milvus")
+    parser.add_argument("data_path", help="Path to a folder containing paper data files or a single paper data file")
+    parser.add_argument("--limit", type=int, help="Optional limit on the number of papers to process per file", default=None)
     
-    # Process papers one by one
-    process_papers_stream(papers_path, limit=None)
+    args = parser.parse_args()
     
-    logger.info("Papers indexing process completed")
+    # Process the papers
+    process_papers_stream(args.data_path, args.limit)
 
 if __name__ == "__main__":
     main() 

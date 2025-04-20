@@ -202,7 +202,7 @@ def process_single_paper(paper_data: Dict[str, Any], milvus_client: MilvusClient
             
             # Main content
             "title": paper.title or "",
-            "abstract": paper.abstract[:2000] or "",
+            "abstract": paper.abstract[:10000] or "",
             
             # Additional metadata
             "year": str(paper.year) if paper.year else "",
@@ -257,7 +257,7 @@ def setup_milvus_collection() -> MilvusClient:
         schema = milvus_client.create_schema()
         schema.add_field("id", DataType.VARCHAR, is_primary=True, max_length=100, description="Paper ID")
         schema.add_field("title", DataType.VARCHAR, max_length=2000, description="Paper title")
-        schema.add_field("abstract", DataType.VARCHAR, max_length=2000, description="Paper abstract")
+        schema.add_field("abstract", DataType.VARCHAR, max_length=10000, description="Paper abstract")
         schema.add_field("year", DataType.VARCHAR, max_length=10, description="Publication year")
         schema.add_field("citations", DataType.ARRAY, element_type=DataType.VARCHAR, max_capacity=100, max_length=100, description="Paper citations")
         schema.add_field("embedding", DataType.FLOAT_VECTOR, dim=EMBEDDING_DIM, description="Text embedding vector")

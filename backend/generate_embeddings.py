@@ -105,42 +105,6 @@ def generate_embedding(text: str) -> List[float]:
         logger.error(f"Error generating embedding: {e}")
         return []
 
-# def prepare_paper_embedding_content(paper: Paper) -> str:
-#     """
-#     Create a structured text representation of a paper for embedding.
-    
-#     Args:
-#         paper: Paper object
-        
-#     Returns:
-#         Formatted text optimized for embedding generation
-#     """
-#     # Create a structured text with clear sections
-#     sections = []
-    
-#     # Title is most important - repeat and emphasize
-#     sections.append(f"TITLE: {paper.title}")
-    
-#     # Abstract provides a good summary
-#     if paper.abstract:
-#         sections.append(f"ABSTRACT: {paper.abstract}")
-    
-#     # Add year if available
-#     if paper.year:
-#         sections.append(f"YEAR: {paper.year}")
-    
-#     # Add authors if available
-#     if hasattr(paper, 'authors') and paper.authors:
-#         author_text = ", ".join(paper.authors) if isinstance(paper.authors, list) else str(paper.authors)
-#         sections.append(f"AUTHORS: {author_text}")
-    
-#     # Add main text if available - this will be truncated by the tokenizer
-#     if paper.text:
-#         sections.append(f"CONTENT: {paper.text}")
-    
-#     # Join with newlines to create clear section separation
-#     return "\n\n".join(sections)
-
 def generate_chunked_embeddings(paper: Paper) -> Tuple[List[float], List[str]]:
     """
     Generate embeddings for a paper by splitting it into chunks and combining the results.
@@ -238,7 +202,7 @@ def process_single_paper(paper_data: Dict[str, Any], milvus_client: MilvusClient
             
             # Main content
             "title": paper.title or "",
-            "abstract": paper.abstract or "",
+            "abstract": paper.abstract[:2000] or "",
             
             # Additional metadata
             "year": str(paper.year) if paper.year else "",
@@ -292,7 +256,7 @@ def setup_milvus_collection() -> MilvusClient:
         logger.info("Creating collection schema")
         schema = milvus_client.create_schema()
         schema.add_field("id", DataType.VARCHAR, is_primary=True, max_length=100, description="Paper ID")
-        schema.add_field("title", DataType.VARCHAR, max_length=500, description="Paper title")
+        schema.add_field("title", DataType.VARCHAR, max_length=2000, description="Paper title")
         schema.add_field("abstract", DataType.VARCHAR, max_length=2000, description="Paper abstract")
         schema.add_field("year", DataType.VARCHAR, max_length=10, description="Publication year")
         schema.add_field("citations", DataType.ARRAY, element_type=DataType.VARCHAR, max_capacity=100, max_length=100, description="Paper citations")

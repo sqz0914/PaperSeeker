@@ -59,6 +59,10 @@ frontend/
 
 ## RAG Approach
 
+<p align="center">
+  <img src="images/RAG%20Approach.png" alt="RAG Approach Diagram" width="80%" />
+</p>
+
 PaperSeeker implements a sophisticated Retrieval-Augmented Generation (RAG) pipeline:
 
 1. **Embedding Generation**:

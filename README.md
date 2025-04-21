@@ -51,14 +51,11 @@ frontend/
 
 #### User Interface Preview
 
-##### Search Interface
-![Search Interface](images/UI%20Screenshot%201.png)
-
-##### Results Display
-![Results Display](images/UI%20Screenshot%202.png)
-
-##### Paper Details
-![Paper Details](images/UI%20Screenshot%203.png)
+<p align="center">
+  <img src="images/UI%20Screenshot%201.png" alt="Search Interface" width="32%" />
+  <img src="images/UI%20Screenshot%202.png" alt="Results Display" width="32%" />
+  <img src="images/UI%20Screenshot%203.png" alt="Paper Details" width="32%" />
+</p>
 
 ## RAG Approach
 

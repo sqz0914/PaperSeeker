@@ -49,6 +49,17 @@ frontend/
 └── package.json           # JavaScript dependencies
 ```
 
+#### User Interface Preview
+
+##### Search Interface
+![Search Interface](images/UI%20Screenshot%201.png)
+
+##### Results Display
+![Results Display](images/UI%20Screenshot%202.png)
+
+##### Paper Details
+![Paper Details](images/UI%20Screenshot%203.png)
+
 ## RAG Approach
 
 PaperSeeker implements a sophisticated Retrieval-Augmented Generation (RAG) pipeline:

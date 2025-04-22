@@ -29,7 +29,7 @@ backend/
 ├── models.py              # Pydantic models for API requests/responses
 ├── generate_embeddings.py # Script to generate embeddings for papers
 ├── requirements.txt       # Python dependencies
-├── .env                   # Environment Variables
+├── .env                   # Environment variables
 └── sample_papers.json     # Sample paper data for testing
 ```
 

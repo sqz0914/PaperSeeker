@@ -6,6 +6,7 @@ import os
 import re
 from typing import List, Dict, Any, Optional, Tuple
 from models import Paper
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -366,9 +367,104 @@ Your response should be in this exact format:
 """
         return prompt
         
+    def _check_paper_relevance(self, query: str, paper: Dict[str, Any], paper_index: int) -> Dict[str, Any]:
+        """
+        Check if a paper is relevant to the query
+        
+        Args:
+            query: User's search query
+            paper: Paper data
+            paper_index: Original index of the paper in the search results
+            
+        Returns:
+            Dictionary with paper, relevance result and original index
+        """
+        # Create a prompt for relevance check
+        relevance_prompt = self._prepare_relevance_prompt(query, paper)
+        
+        # Call LLM to check relevance
+        relevance_response = self.call_llm(relevance_prompt)
+        
+        # Parse the JSON response
+        try:
+            # Extract JSON content
+            json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', relevance_response)
+            if json_match:
+                json_content = json_match.group(1)
+            else:
+                json_match = re.search(r'(\{[\s\S]*\})', relevance_response)
+                if json_match:
+                    json_content = json_match.group(1)
+                else:
+                    logger.warning(f"No JSON content found in relevance check for paper: {paper['title']}")
+                    return {
+                        "paper": paper,
+                        "is_relevant": False,
+                        "reason": "Failed to parse relevance check",
+                        "original_index": paper_index
+                    }
+            
+            relevance_result = json.loads(json_content)
+            is_relevant = relevance_result.get('relevant', False)
+            reason = relevance_result.get('reason', '')
+            
+            logger.info(f"Paper '{paper['title']}' relevance: {is_relevant} - {reason}")
+            
+            return {
+                "paper": paper,
+                "is_relevant": is_relevant,
+                "reason": reason,
+                "original_index": paper_index
+            }
+                
+        except Exception as e:
+            logger.error(f"Error parsing relevance check JSON for paper '{paper['title']}': {e}")
+            return {
+                "paper": paper,
+                "is_relevant": False,
+                "reason": f"Error: {str(e)}",
+                "original_index": paper_index
+            }
+        
+    def _generate_paper_summary(self, query: str, paper: Dict[str, Any], paper_index: int) -> Dict[str, Any]:
+        """
+        Generate a summary for a specific paper
+        
+        Args:
+            query: User's search query
+            paper: Paper data
+            paper_index: Original index of the paper
+            
+        Returns:
+            Dictionary with paper and its summary
+        """
+        try:
+            logger.info(f"Generating summary for paper: {paper['title']}")
+            
+            # Create a prompt for this specific paper
+            paper_prompt = self._prepare_single_paper_prompt(query, paper)
+            
+            # Call LLM for paper summary
+            paper_summary = self.call_llm(paper_prompt)
+            
+            # Create a copy with summary
+            paper_with_summary = paper.copy()
+            paper_with_summary['summary'] = paper_summary.strip()
+            paper_with_summary['original_index'] = paper_index
+            
+            return paper_with_summary
+        except Exception as e:
+            logger.error(f"Error generating summary for paper '{paper['title']}': {e}")
+            # Return paper with error message as summary
+            paper_with_summary = paper.copy()
+            paper_with_summary['summary'] = f"Error generating summary: {str(e)}"
+            paper_with_summary['original_index'] = paper_index
+            return paper_with_summary
+
     def filter_and_generate(self, query: str, papers: List[Dict[str, Any]], 
                           max_papers_for_filter: int = 20,
-                          max_papers_for_response: int = 5) -> Dict[str, Any]:
+                          max_papers_for_response: int = 5,
+                          max_workers: int = 5) -> Dict[str, Any]:
         """
         Filter papers for relevance, generate summaries for relevant papers, and create a comprehensive response
         
@@ -377,6 +473,7 @@ Your response should be in this exact format:
             papers: List of papers from vector search/BM25
             max_papers_for_filter: Maximum number of papers to check for relevance
             max_papers_for_response: Maximum number of papers to include in final response
+            max_workers: Maximum number of concurrent workers for parallel processing
             
         Returns:
             Dictionary containing introduction, papers with summaries, and conclusion
@@ -402,48 +499,30 @@ Your response should be in this exact format:
             if title:
                 title_to_paper[title] = paper
         
-        # Filter papers for relevance
-        relevant_papers = []
-        for i, paper in enumerate(prepared_papers):
-            logger.info(f"Checking relevance of paper {i+1}/{len(prepared_papers)}: {paper['title']}")
+        # Filter papers for relevance in parallel
+        relevant_papers_results = []
+        
+        logger.info(f"Starting parallel relevance checks for {len(prepared_papers)} papers")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all relevance check tasks
+            future_to_paper = {
+                executor.submit(self._check_paper_relevance, query, paper, i): (i, paper) 
+                for i, paper in enumerate(prepared_papers)
+            }
             
-            # Create a prompt for relevance check
-            relevance_prompt = self._prepare_relevance_prompt(query, paper)
-            
-            # Call LLM to check relevance
-            relevance_response = self.call_llm(relevance_prompt)
-            
-            # Parse the JSON response
-            try:
-                # Extract JSON content
-                json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', relevance_response)
-                if json_match:
-                    json_content = json_match.group(1)
-                else:
-                    json_match = re.search(r'(\{[\s\S]*\})', relevance_response)
-                    if json_match:
-                        json_content = json_match.group(1)
-                    else:
-                        logger.warning(f"No JSON content found in relevance check for paper: {paper['title']}")
-                        continue
+            # Process completed tasks as they finish
+            for future in as_completed(future_to_paper):
+                result = future.result()
+                if result["is_relevant"]:
+                    paper = result["paper"]
+                    paper['relevance_reason'] = result["reason"]
+                    relevant_papers_results.append(result)
                 
-                relevance_result = json.loads(json_content)
-                is_relevant = relevance_result.get('relevant', False)
-                reason = relevance_result.get('reason', '')
-                
-                logger.info(f"Paper '{paper['title']}' relevance: {is_relevant} - {reason}")
-                
-                if is_relevant:
-                    paper['relevance_reason'] = reason
-                    relevant_papers.append(paper)
-                    
-                    # Break early if we have enough relevant papers
-                    if len(relevant_papers) >= max_papers_for_response:
-                        break
-                        
-            except Exception as e:
-                logger.error(f"Error parsing relevance check JSON for paper '{paper['title']}': {e}")
-                continue
+        # Sort by original index to respect the initial ranking from the search
+        relevant_papers_results.sort(key=lambda x: x["original_index"])
+        
+        # Extract the paper objects from the results
+        relevant_papers = [result["paper"] for result in relevant_papers_results]
         
         # If we have no relevant papers, return a message
         if not relevant_papers:
@@ -458,33 +537,39 @@ Your response should be in this exact format:
         # Limit to max_papers_for_response
         relevant_papers = relevant_papers[:max_papers_for_response]
         
-        # Process each relevant paper to get summaries
+        # Process each relevant paper to get summaries in parallel
+        paper_indices = {paper['title']: i for i, paper in enumerate(relevant_papers)}
         papers_with_summaries = []
-        for i, paper in enumerate(relevant_papers):
-            logger.info(f"Generating summary for paper {i+1}/{len(relevant_papers)}: {paper['title']}")
+        
+        logger.info(f"Starting parallel summary generation for {len(relevant_papers)} papers")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all summary generation tasks
+            future_to_summary = {
+                executor.submit(self._generate_paper_summary, query, paper, i): (i, paper) 
+                for i, paper in enumerate(relevant_papers)
+            }
             
-            # Create a prompt for this specific paper
-            paper_prompt = self._prepare_single_paper_prompt(query, paper)
-            
-            # Call LLM for paper summary
-            paper_summary = self.call_llm(paper_prompt)
-            
-            # Add summary to paper object
-            paper_with_summary = paper.copy()
-            paper_with_summary['summary'] = paper_summary.strip()
-            
-            # Add original paper data
-            if paper['title'] in title_to_paper:
-                paper_with_summary['paper_data'] = title_to_paper[paper['title']]
-            else:
-                # Try to find a close match
-                for paper_title, paper_obj in title_to_paper.items():
-                    if (paper['title'].lower() in paper_title.lower() or 
-                        paper_title.lower() in paper['title'].lower()):
-                        paper_with_summary['paper_data'] = paper_obj
-                        break
-            
-            papers_with_summaries.append(paper_with_summary)
+            # Process completed tasks as they finish
+            summary_results = []
+            for future in as_completed(future_to_summary):
+                paper_with_summary = future.result()
+                
+                # Add original paper data
+                if paper_with_summary['title'] in title_to_paper:
+                    paper_with_summary['paper_data'] = title_to_paper[paper_with_summary['title']]
+                else:
+                    # Try to find a close match
+                    for paper_title, paper_obj in title_to_paper.items():
+                        if (paper_with_summary['title'].lower() in paper_title.lower() or 
+                            paper_title.lower() in paper_with_summary['title'].lower()):
+                            paper_with_summary['paper_data'] = paper_obj
+                            break
+                
+                summary_results.append(paper_with_summary)
+        
+        # Sort by original index to maintain the order
+        summary_results.sort(key=lambda x: x.get('original_index', 0))
+        papers_with_summaries = summary_results
         
         # Generate introduction and conclusion based on all paper summaries
         conclusion_prompt = self._prepare_conclusion_prompt(query, papers_with_summaries)

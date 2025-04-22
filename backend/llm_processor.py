@@ -192,62 +192,6 @@ class LLMProcessor:
             logger.error(f"Error calling LLM: {e}")
             return "Error connecting to language model service."
     
-    def extract_top_papers_indices(self, reranking_result: str) -> List[int]:
-        """
-        Extract the indices of top papers from the LLM reranking result
-        
-        Args:
-            reranking_result: The LLM's response to the reranking prompt
-            
-        Returns:
-            List of paper indices (0-based)
-        """
-        try:
-            # Look for the SELECTED: line
-            if "SELECTED:" in reranking_result:
-                selected_line = [line for line in reranking_result.split('\n') 
-                               if "SELECTED:" in line][0]
-                # Extract numbers after "SELECTED:"
-                selected_part = selected_line.split("SELECTED:")[1].strip()
-                # Parse the comma-separated list of paper numbers
-                paper_numbers = [int(num.strip()) for num in selected_part.split(',')]
-                # Convert to 0-based indices (papers were numbered from 1)
-                return [num - 1 for num in paper_numbers]
-            else:
-                # Fallback: try to find numbered list like "1. [PAPER X]"
-                paper_indices = []
-                lines = reranking_result.split('\n')
-                for line in lines:
-                    if re.search(r'\d+\.\s*\[PAPER\s+(\d+)\]', line):
-                        match = re.search(r'\[PAPER\s+(\d+)\]', line)
-                        if match:
-                            paper_idx = int(match.group(1)) - 1  # Convert to 0-based
-                            paper_indices.append(paper_idx)
-                
-                # If we found at least one, return them (max 5)
-                if paper_indices:
-                    return paper_indices[:5]
-                
-                # Last resort: just look for paper numbers
-                all_matches = re.findall(r'\[PAPER\s+(\d+)\]', reranking_result)
-                if all_matches:
-                    # Remove duplicates while preserving order
-                    seen = set()
-                    unique_indices = []
-                    for idx in [int(m) - 1 for m in all_matches]:
-                        if idx not in seen:
-                            seen.add(idx)
-                            unique_indices.append(idx)
-                    return unique_indices[:5]
-                
-                # If all parsing fails, return the first 5 papers
-                logger.warning("Could not parse paper indices from LLM result, using first 5 papers")
-                return list(range(min(5, len(reranking_result))))
-        except Exception as e:
-            logger.error(f"Error extracting top paper indices: {e}")
-            # Return the first 5 papers as a fallback
-            return list(range(5))
-    
     def _prepare_single_paper_prompt(self, query: str, paper: Dict[str, Any]) -> str:
         """
         Create a prompt for LLM to generate a summary for a single paper
@@ -464,7 +408,7 @@ Your response should be in this exact format:
     def filter_and_generate(self, query: str, papers: List[Dict[str, Any]], 
                           max_papers_for_filter: int = 20,
                           max_papers_for_response: int = 5,
-                          max_workers: int = 5) -> Dict[str, Any]:
+                          max_workers: int = 20) -> Dict[str, Any]:
         """
         Filter papers for relevance, generate summaries for relevant papers, and create a comprehensive response
         
@@ -538,7 +482,6 @@ Your response should be in this exact format:
         relevant_papers = relevant_papers[:max_papers_for_response]
         
         # Process each relevant paper to get summaries in parallel
-        paper_indices = {paper['title']: i for i, paper in enumerate(relevant_papers)}
         papers_with_summaries = []
         
         logger.info(f"Starting parallel summary generation for {len(relevant_papers)} papers")

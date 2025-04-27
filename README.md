@@ -105,7 +105,7 @@ PaperSeeker implements a sophisticated Retrieval-Augmented Generation (RAG) pipe
 
 1. Clone the repository and navigate to the backend directory:
    ```bash
-   git clone https://github.com/yourusername/PaperSeeker.git
+   git clone https://github.com/sqz0914/PaperSeeker.git
    cd PaperSeeker/backend
    ```
 
@@ -164,16 +164,6 @@ PaperSeeker implements a sophisticated Retrieval-Augmented Generation (RAG) pipe
    ollama pull llama3.2
    ```
 3. Ensure Ollama is running before starting the backend
-
-## Deploying to Production
-
-For production deployment:
-
-1. Set restrictive CORS settings in `app.py`
-2. Configure proper environment variables for production
-3. Use a production-grade server like Gunicorn for the backend
-4. Build the frontend for production with `npm run build`
-5. Deploy the frontend to a static hosting service or CDN
 
 ## Acknowledgments
 
